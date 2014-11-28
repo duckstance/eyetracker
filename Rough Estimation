@@ -1,0 +1,36 @@
+import cv2
+import numpy as np
+
+img = cv2.imread('C:/Users/Arno/Documents/Masterarbeit/Matlab/eye_test.png', 0)
+cimg = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+img_blur = cv2.blur(img, (50, 50))
+img_gaussian = cv2.GaussianBlur(img, (51, 51), 0)
+
+ret, thresh2 = cv2.threshold(img_gaussian, 50, 255, cv2.THRESH_BINARY_INV)
+# cv2.imshow('blurred', thresh2)
+
+contours = cv2.findContours(thresh2, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+cnt1 = contours[0]
+cnt2 = contours[1]
+
+cv2.drawContours(cimg, cnt2, -1, (0, 255, 0), 2)
+
+# cv2.imshow('tresh', thresh2)
+
+M = cv2.moments(cnt2[0])
+
+cx = int(M['m10']/M['m00'])
+cy = int(M['m01']/M['m00'])
+
+cv2.circle(cimg, (cx, cy), 1, (0, 0, 255), 2)
+
+
+# ellipse = cv2.fitEllipse(cnt2[0])
+# cv2.ellipse(cimg, ellipse, (255, 0, 0), 2)
+
+cv2.imshow('blurred', cimg)
+
+
+cv2.waitKey(0)
+cv2.destroyAllWindows()
