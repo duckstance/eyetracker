@@ -1,42 +1,37 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 import cv2
+import cv2.cv as cv
 import numpy as np
 
 
-def resizeImg(img):
+def hough_circle(img):
 
-    image = cv2.imread('C:/Users/Arno/Documents/Masterarbeit/Matlab/eye_test.png', 0)
-    img_grey = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
+    # cimg = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
     scalefactor = 4     # upsample factor
 
-    pupilCenter = roughPupilCenter(image)
-
-
-    img_crop = img_grey[460:650, 350:650]
+    # img_crop = img[460:650, 350:650]
     # img_crop = img_grey[pupilCenter[0]-100:pupilCenter[0]+100, pupilCenter[1]-150:pupilCenter[1]+150]
-    minisize = (img_crop.shape[1]*scalefactor,img_crop.shape[0]*scalefactor)
-    img_big = cv2.resize(img_crop, minisize)
+    # minisize = (img_crop.shape[1]*scalefactor, img_crop.shape[0]*scalefactor)
+    # img_big = cv2.resize(img_crop, minisize)
 
-    circles = cv2.HoughCircles(img_big, cv2.HOUGH_GRADIENT, 1, 100, param1=50, param2=20, minRadius=110, maxRadius=130)
+    # canny = cv2.Canny(img, 30, 60)
+    # minisize = (int(canny.shape[1]*0.3), int(canny.shape[0]*0.3))
+    # img_small = cv2.resize(canny, minisize)
+
+    # cv2.imshow('canny', img_small)
+
+    # dp – Inverse ratio of the accumulator resolution, minDist – Minimum distance between the centers of the detected circles, param1: canny higher threshold, param2 – accumulator threshold
+    circles = cv2.HoughCircles(img, cv.CV_HOUGH_GRADIENT, 1, 100, param1=80, param2=25, minRadius=180, maxRadius=210)
+
+    circle = circles[0, 0]
+
+    return circle[0], circle[1]
 
 
-    for i in circles[0, :]:
-        # draw the outer circle
-        cv2.circle(img_big,(i[0],i[1]),i[2],(0,255,0),2)
-        # draw the center of the circle
-        cv2.circle(img_big,(i[0],i[1]),2,(0,0,255),3)
-
-        cv2.imshow('big',img_big)
-
-
-    return 1
-
-
-def roughPupilCenter(img):
-
+def rough_pupil_center1(img):
 
     img_blur = cv2.blur(img, (50,50))
-
 
     #find position of darkest area
     index_y, index_x = np.where(img_blur == img_blur.min())
@@ -53,3 +48,52 @@ def roughPupilCenter(img):
 
 
     return center_coords
+
+
+def center_of_mass(img):
+
+
+    cimg = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+    img_blur = cv2.blur(img, (50, 50))      #
+    img_gaussian = cv2.GaussianBlur(img, (11, 11), 0)
+
+    ret, thresh2 = cv2.threshold(img_gaussian, 50, 255, cv2.THRESH_BINARY_INV)
+    # cv2.imshow('blurred', thresh2)
+
+    contours = cv2.findContours(thresh2, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+    cnt = contours[0]
+
+    cv2.drawContours(cimg, cnt, -1, (0, 255, 0), 2)
+
+    # cv2.imshow('tresh', thresh2)
+
+    M = cv2.moments(cnt[0])
+
+    cx = M['m10']/M['m00']
+    cy = M['m01']/M['m00']
+
+    cv2.circle(cimg, (int(cx), int(cy)), 1, (0, 0, 255), 2)
+
+    # ellipse = cv2.fitEllipse(ellipse_points)
+    # cv2.ellipse(cimg, ellipse, (255, 0, 0), 2)
+
+
+    return cx, cy
+
+def distance_transform(img):
+
+    scalefactor = np.float32(4)
+
+    img = cv2.imread('C:/Users/Arno/PycharmProjects/eyeTracker/data/eye_new/right/20141209_Ortho_1Cam__0800.png', 0)
+    cimg = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+
+    ret, thresh = cv2.threshold(img, 50, 255, cv2.THRESH_BINARY_INV)
+    img_small = cv2.resize(thresh, (0, 0), fx=(1/scalefactor), fy=(1/scalefactor))
+
+    dist_transform = cv2.distanceTransform(img_small, cv2.cv.CV_DIST_L2, 5)
+    equalized = cv2.normalize(dist_transform, alpha=0., beta=1., norm_type=cv2.NORM_MINMAX)
+
+    # cv2.imshow('Dist Transform', equalized)
+
+    return 1
