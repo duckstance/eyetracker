@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 
 import rough_estimation
 
-raylength = 150
+raylength = 200
 scalefactor = np.float32(4)
 
 tonwert_list = []
@@ -17,7 +17,7 @@ point_coords = []
 
 # black_img = np.zeros((500, 500), np.uint8)             # create blank image
 
-img_src = cv2.imread('../data/eye_new/right/20141209_Ortho_1Cam__0800.png', 0)
+img_src = cv2.imread('../data/eye_new/right/3.png', 0)
 img_small = cv2.resize(img_src, (0, 0), fx=(1/scalefactor), fy=(1/scalefactor))
 img = cv2.medianBlur(img_small, 3)
 cimg = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
@@ -29,71 +29,71 @@ rough_center_y = rough_center[1]
 start = time.clock()
 
 for alpha in range(0, 46, 10):
-    tone1 = np.zeros((230, 3), int)
-    tone2 = np.zeros((230, 3), int)
-    tone3 = np.zeros((230, 3), int)
-    tone4 = np.zeros((230, 3), int)
-    tone5 = np.zeros((230, 3), int)
-    tone6 = np.zeros((230, 3), int)
-    tone7 = np.zeros((230, 3), int)
-    tone8 = np.zeros((230, 3), int)
+    tone1 = np.zeros((raylength, 3), int)
+    tone2 = np.zeros((raylength, 3), int)
+    tone3 = np.zeros((raylength, 3), int)
+    tone4 = np.zeros((raylength, 3), int)
+    tone5 = np.zeros((raylength, 3), int)
+    tone6 = np.zeros((raylength, 3), int)
+    tone7 = np.zeros((raylength, 3), int)
+    tone8 = np.zeros((raylength, 3), int)
 
     for i in range(0, raylength):
 
         # 1. Quadrant
-        y = np.int((np.tan(alpha * np.pi / 180) * i) + 250)
-        x = i + 250
+        y = np.int((np.tan(alpha * np.pi / 180) * -i) + rough_center_y)
+        x = i + rough_center_x
 
-        if 20 < y < 480 and 0 < x < 480:
-            tone1[i, 0] = img[500-y, x]
+        if 20 < y < height and 0 < x < width:
+            tone1[i, 0] = img[y, x]
             tone1[i, 1] = x
-            tone1[i, 2] = 500-y
-            cimg[500-y, x] = 255
+            tone1[i, 2] = y
+            cimg[y, x] = 255
 
-        x = np.int((np.tan(alpha * np.pi / 180) * i) + 250)
-        y = i + 250
+        x = np.int((np.tan(alpha * np.pi / 180) * i) + rough_center_x)
+        y = -i + rough_center_y
 
-        if 20 < y < 480 and 0 < x < 480:
-            tone2[i, 0] = img[500-y, x]
+        if 20 < y < height and 0 < x < width:
+            tone2[i, 0] = img[y, x]
             tone2[i, 1] = x
-            tone2[i, 2] = 500-y
-            cimg[500-y, x] = 255
+            tone2[i, 2] = y
+            cimg[y, x] = 255
 
 
         # 2. Quadrant
-        y = np.int((np.tan(alpha * np.pi / 180) * i) + 250)
-        x = i + 250
+        y = np.int((np.tan(alpha * np.pi / 180) * -i) + rough_center_y)
+        x = -i + rough_center_x
 
-        if 20 < y < 480 and 0 < x < 480:
-            tone3[i, 0] = img[500-y, 500-x]
-            tone3[i, 1] = 500-x
-            tone3[i, 2] = 500-y
-            cimg[500-y, 500-x] = 255
+        if 20 < y < height and 0 < x < width:
+            tone3[i, 0] = img[y, x]
+            tone3[i, 1] = x
+            tone3[i, 2] = y
+            cimg[y, x] = 255
 
-        x = np.int((np.tan(alpha * np.pi / 180) * i) + 250)
-        y = i + 250
+        x = np.int((np.tan(alpha * np.pi / 180) * -i) + rough_center_x)
+        y = -i + rough_center_y
 
-        if 20 < y < 480 and 0 < x < 480:
-            tone4[i, 0] = img[500-y, 500-x]
-            tone4[i, 1] = 500-x
-            tone4[i, 2] = 500-y
-            cimg[500-y, 500-x] = 255
+        if 20 < y < height and 0 < x < width:
+            tone4[i, 0] = img[y, x]
+            tone4[i, 1] = x
+            tone4[i, 2] = y
+            cimg[y, x] = 255
 
 
         # 3. quadrant
-        y = np.int((np.tan(-alpha * np.pi / 180) * i) + 250)
-        x = i + 250
+        y = np.int((np.tan(-alpha * np.pi / 180) * -i) + rough_center_y)
+        x = -i + rough_center_x
 
-        if 20 < y < 480 and 0 < x < 480:
-            tone5[i, 0] = img[500-y, 500-x]
-            tone5[i, 1] = 500-x
-            tone5[i, 2] = 500-y
-            cimg[500-y, 500-x] = 255
+        if 20 < y < height and 0 < x < width:
+            tone5[i, 0] = img[y, x]
+            tone5[i, 1] = x
+            tone5[i, 2] = y
+            cimg[y, x] = 255
 
-        x = np.int((np.tan(-alpha * np.pi / 180) * i) + 250)
-        y = i + 250
+        x = np.int((np.tan(-alpha * np.pi / 180) * i) + rough_center_x)
+        y = i + rough_center_y
 
-        if 20 < y < 480 and 0 < x < 480:
+        if 20 < y < height and 0 < x < width:
             tone6[i, 0] = img[y, x]
             tone6[i, 1] = x
             tone6[i, 2] = y
@@ -101,26 +101,24 @@ for alpha in range(0, 46, 10):
 
 
         # 4. Quadrant
-        y = np.int((np.tan(alpha * np.pi / 180) * i) + 250)
-        x = i + 250
+        y = np.int((np.tan(alpha * np.pi / 180) * i) + rough_center_y)
+        x = i + rough_center_x
 
-        if 20 < y < 480 and 0 < x < 480:
+        if 20 < y < height and 0 < x < width:
             tone7[i, 0] = img[y, x]
             tone7[i, 1] = x
             tone7[i, 2] = y
             cimg[y, x] = 255
 
-        x = np.int((np.tan(alpha * np.pi / 180) * i) + 250)
-        y = i + 250
+        x = np.int((np.tan(alpha * np.pi / 180) * i) + rough_center_x)
+        y = i + rough_center_y
 
-        if 20 < y < 480 and 0 < x < 480:
+        if 20 < y < height and 0 < x < width:
             tone8[i, 0] = img[y, x]
             tone8[i, 1] = x
             tone8[i, 2] = y
             cimg[y, x] = 255
 
-        # cv2.imshow('black', black_img)
-        # cv2.waitKey(1)
 
     tonwert_list.append(tone1)
     tonwert_list.append(tone2)
