@@ -1,0 +1,171 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+import numpy as np
+import cv2
+import cv2.cv as cv
+import time
+import matplotlib.pyplot as plt
+
+import rough_estimation
+
+raylength = 150
+scalefactor = np.float32(4)
+
+tonwert_list = []
+point_coords = []
+
+
+# black_img = np.zeros((500, 500), np.uint8)             # create blank image
+
+img_src = cv2.imread('../data/eye_new/right/20141209_Ortho_1Cam__0800.png', 0)
+img_small = cv2.resize(img_src, (0, 0), fx=(1/scalefactor), fy=(1/scalefactor))
+img = cv2.medianBlur(img_small, 3)
+cimg = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+height, width = img.shape
+
+rough_center = rough_estimation.darkest_area(img)
+rough_center_x = rough_center[0]
+rough_center_y = rough_center[1]
+start = time.clock()
+
+for alpha in range(0, 46, 10):
+    tone1 = np.zeros((230, 3), int)
+    tone2 = np.zeros((230, 3), int)
+    tone3 = np.zeros((230, 3), int)
+    tone4 = np.zeros((230, 3), int)
+    tone5 = np.zeros((230, 3), int)
+    tone6 = np.zeros((230, 3), int)
+    tone7 = np.zeros((230, 3), int)
+    tone8 = np.zeros((230, 3), int)
+
+    for i in range(0, raylength):
+
+        # 1. Quadrant
+        y = np.int((np.tan(alpha * np.pi / 180) * i) + 250)
+        x = i + 250
+
+        if 20 < y < 480 and 0 < x < 480:
+            tone1[i, 0] = img[500-y, x]
+            tone1[i, 1] = x
+            tone1[i, 2] = 500-y
+            cimg[500-y, x] = 255
+
+        x = np.int((np.tan(alpha * np.pi / 180) * i) + 250)
+        y = i + 250
+
+        if 20 < y < 480 and 0 < x < 480:
+            tone2[i, 0] = img[500-y, x]
+            tone2[i, 1] = x
+            tone2[i, 2] = 500-y
+            cimg[500-y, x] = 255
+
+
+        # 2. Quadrant
+        y = np.int((np.tan(alpha * np.pi / 180) * i) + 250)
+        x = i + 250
+
+        if 20 < y < 480 and 0 < x < 480:
+            tone3[i, 0] = img[500-y, 500-x]
+            tone3[i, 1] = 500-x
+            tone3[i, 2] = 500-y
+            cimg[500-y, 500-x] = 255
+
+        x = np.int((np.tan(alpha * np.pi / 180) * i) + 250)
+        y = i + 250
+
+        if 20 < y < 480 and 0 < x < 480:
+            tone4[i, 0] = img[500-y, 500-x]
+            tone4[i, 1] = 500-x
+            tone4[i, 2] = 500-y
+            cimg[500-y, 500-x] = 255
+
+
+        # 3. quadrant
+        y = np.int((np.tan(-alpha * np.pi / 180) * i) + 250)
+        x = i + 250
+
+        if 20 < y < 480 and 0 < x < 480:
+            tone5[i, 0] = img[500-y, 500-x]
+            tone5[i, 1] = 500-x
+            tone5[i, 2] = 500-y
+            cimg[500-y, 500-x] = 255
+
+        x = np.int((np.tan(-alpha * np.pi / 180) * i) + 250)
+        y = i + 250
+
+        if 20 < y < 480 and 0 < x < 480:
+            tone6[i, 0] = img[y, x]
+            tone6[i, 1] = x
+            tone6[i, 2] = y
+            cimg[y, x] = 255
+
+
+        # 4. Quadrant
+        y = np.int((np.tan(alpha * np.pi / 180) * i) + 250)
+        x = i + 250
+
+        if 20 < y < 480 and 0 < x < 480:
+            tone7[i, 0] = img[y, x]
+            tone7[i, 1] = x
+            tone7[i, 2] = y
+            cimg[y, x] = 255
+
+        x = np.int((np.tan(alpha * np.pi / 180) * i) + 250)
+        y = i + 250
+
+        if 20 < y < 480 and 0 < x < 480:
+            tone8[i, 0] = img[y, x]
+            tone8[i, 1] = x
+            tone8[i, 2] = y
+            cimg[y, x] = 255
+
+        # cv2.imshow('black', black_img)
+        # cv2.waitKey(1)
+
+    tonwert_list.append(tone1)
+    tonwert_list.append(tone2)
+    tonwert_list.append(tone3)
+    tonwert_list.append(tone4)
+    tonwert_list.append(tone5)
+    tonwert_list.append(tone6)
+    tonwert_list.append(tone7)
+    tonwert_list.append(tone8)
+
+
+for k in tonwert_list:
+
+    grad = np.absolute(np.gradient(k[:, 0]))
+    print k[:, 0], '\n', grad
+
+    position = np.where(grad == grad.max())
+    first_coord = position[0]
+    # take center for multiple gradient maxima
+    center_1 = ((np.amin(first_coord) + np.amax(first_coord)) / 2)
+
+    edge_point = k[center_1]
+    edge_coord_x = edge_point[1]
+    edge_coord_y = edge_point[2]
+    edge_temp = edge_coord_x, edge_coord_y
+    point_coords.append(edge_temp)
+
+
+    cimg[edge_coord_y, edge_coord_x] = (0, 0, 255)
+
+    # plt.plot(grad)
+    # plt.ylabel('some numbers')
+    # plt.show()
+
+
+# fit ellipse
+ellipse_points = np.matrix(point_coords)
+print ellipse_points
+ellipse = cv2.fitEllipse(ellipse_points)
+cv2.ellipse(cimg, ellipse, (255, 0, 0), 1)
+
+cv2.imshow('black', cimg)
+elapsed = (time.clock() - start)
+print 'elapsed time:', elapsed
+
+
+cv2.waitKey(0)
+cv2.destroyAllWindows()
