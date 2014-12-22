@@ -18,9 +18,9 @@ center_list = []
 # Mat_centers = np.zeros((5, 3), np.float32)      # Zeilen, Spalten
 k = 0
 
-for root, dirs, files in os.walk(r'../data/eye_new/right'):     # create filelist of source images
+for root, dirs, files in os.walk(r'../data/25/right'):     # create filelist of source images
     for file in files:
-        if file.endswith('.png'):
+        if file.endswith('.tif'):
             filelist.append(root+'/'+file)
 
 for imagefile in filelist:                                  # load source images ans store in list
@@ -31,7 +31,7 @@ for imagefile in filelist:                                  # load source images
     cimglist.append(cimg)
 
 height, width = img_load.shape                              # get image size
-white_img = np.zeros((1000, 1000, 3), np.uint8)             # create blank image
+white_img = np.zeros((1080, 1920, 3), np.uint8)             # create blank image
 white_img[:] = (255, 255, 255)
 
 # pupil_detection.houghCircle(cimglist[0])
@@ -40,32 +40,39 @@ white_img[:] = (255, 255, 255)
 for img in imglist:
 
     #center = pupil_detection.center_of_mass(img)
-    center = pupil_detection.hough_circle(img)
+    #center = pupil_detection.hough_circle(img)
     #center = rough_estimation.darkest_area(img)
+    center = pupil_detection.starburst(img)
 
     if center is not None:
 
         center_list.append(center)
 
-        for i in center_list:
-            # draw the center of the circle
-            cv2.circle(cimglist[k], (int(i[0]), int(i[1])), 3, (0, 0, 255), 3)
+        big_center = np.multiply(center, 4)
+        cropped_center = np.subtract(big_center, 800)
+        # draw the center of the circle
+        cv2.circle(cimglist[k], (int(center[0]), int(center[1])), 3, (0, 0, 255), 3)
 
         # cv2.imshow(str(k),cimglist[k])
-        for i in center_list:
-            cv2.circle(white_img, (int(i[0]), int(i[1])), 1, (0, 0, 255), 2)
+        cv2.circle(white_img, (int(cropped_center[0]), int(cropped_center[1])), 1, (0, 0, 255), 2)
     else:
         print('No Circles Detected!')
     k += 1
 
-# cv2.imshow('Gaze Koordinates',white_img)
+cv2.imshow('Gaze Koordinates',white_img)
 
 src_Points = np.float32(center_list)
-dst_Points = np.float32([[240, 135], [1680, 135], [1680, 945], [240, 945], [960, 540]])
 
-H, mask = cv2.findHomography(src_Points, dst_Points) #, cv2.RANSAC, 5.0)            # find perspective transformation Matrix H
+# dst_Points = np.float32([[240, 135], [1680, 135], [1680, 945], [240, 945], [960, 540]])   # for 5 points
+dst_Points = np.float32([[0, 0],     [480, 0],   [960, 0],   [1440, 0],   [1920, 0],
+                         [1920, 270],[1440, 270],[960, 270], [480, 270],  [0, 270],
+                         [0, 540],   [480, 540], [960, 540], [1440, 540], [1920, 540],
+                         [1920, 810],[1440, 810],[960, 810], [480, 810],  [0, 810],
+                         [0, 1080],  [480, 1080],[960, 1080],[1440, 1080],[1920, 1080]])     # for 25 points
 
-pts = np.float32(src_Points).reshape(-1, 5, 2)
+H, mask = cv2.findHomography(src_Points, dst_Points) #, cv2.RANSAC, 5.0) cv2.LMEDS)             # find perspective transformation Matrix H
+
+pts = np.float32(src_Points).reshape(-1, 25, 2)
 
 
 if H is not None:
@@ -74,9 +81,10 @@ if H is not None:
 else:
     print('No Homography Matrix created!')
 
+print dst_Points, '\n', dst_Array
 error = np.matrix(np.subtract(dst_Points, dst_Array))            # difference between x,y coords of source points and calibrated points
-print pts, dst_Array
 dist = np.sqrt(np.square(error[:, 0]) + np.square(error[:, 1]))  # euclidian distance between calibration points and mapped points
+
 # temp = np.sqrt(np.square(error))
 print 'distance', dist
 
