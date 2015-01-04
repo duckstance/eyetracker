@@ -6,6 +6,7 @@ import argparse
 import glob
 import os
 from scipy.spatial.distance import cdist
+from scipy.spatial import distance
 
 # import functions
 import pupil_detection
@@ -15,6 +16,7 @@ filelist = []
 imglist = []
 cimglist = []
 pupilcenter_list = []
+corrected_coords = []
 corrected_coords_x = []
 corrected_coords_y = []
 # Mat_centers = np.zeros((5, 3), np.float32)      # Zeilen, Spalten
@@ -64,103 +66,52 @@ for img in imglist:
 # center pupil coordinates to origin
 center_coordinate = pupilcenter_list[12]
 pupilcenter_matrix = np.matrix(pupilcenter_list)
-centered_centerlist_x = np.subtract(pupilcenter_matrix[:,0], center_coordinate[0])
-centered_centerlist_y = np.subtract(pupilcenter_matrix[:,1], center_coordinate[1])
+# centered_centerlist_x = np.subtract(pupilcenter_matrix[:,0], center_coordinate[0])
+# centered_centerlist_y = np.subtract(pupilcenter_matrix[:,1], center_coordinate[1])
+# centered_coords = np.hstack([centered_centerlist_x, centered_centerlist_y])
+centered_coords = np.subtract(pupilcenter_matrix[:,:], center_coordinate)
 
-# alpha1_rel = np.tan(7.87757805 * np.pi / 180) / np.sin(7.87757805 * np.pi / 180)
-# alpha2_rel = np.tan(15.46810938 * np.pi / 180) / np.sin(15.46810938 * np.pi / 180)
-# beta1_rel = np.tan(4.4503 * np.pi / 180) / np.sin(4.4503 * np.pi / 180)
-# beta2_rel = np.tan(8.84754227 * np.pi / 180) / np.sin(8.84754227 * np.pi / 180)
+alpha_corner = np.arctan(np.sqrt(np.square(960) + np.square(540)) / 3469.1451497)   #angle between monitor corner, monitor center and eye
 
-alpha01 = np.tan(7.87757805 * np.pi / 180) / np.sin(7.87757805 * np.pi / 180)
-alpha02 = np.tan(15.46810938 * np.pi / 180) / np.sin(15.46810938 * np.pi / 180)
-alpha10 = np.tan(4.4503 * np.pi / 180) / np.sin(4.4503 * np.pi / 180)
-alpha11 = np.tan(9.02043131 * np.pi / 180) / np.sin(9.02043131 * np.pi / 180)
-alpha12 = np.tan(16.037914 * np.pi / 180) / np.sin(16.037914 * np.pi / 180)
-alpha20 = np.tan(8.84754227 * np.pi / 180) / np.sin(8.84754227 * np.pi / 180)
-alpha21 = np.tan(11.764444 * np.pi / 180) / np.sin(11.764444 * np.pi / 180)
-alpha22 = np.tan(17.6146433 * np.pi / 180) / np.sin(17.6146433 * np.pi / 180)
+norm_factor = 960 / np.absolute(centered_coords[0,0])
 
-
-corrected_coords_x.append(centered_centerlist_x[0] * alpha22)
-corrected_coords_x.append(centered_centerlist_x[1] * alpha21)
-corrected_coords_x.append(centered_centerlist_x[2] * alpha20)
-corrected_coords_x.append(centered_centerlist_x[3] * alpha21)
-corrected_coords_x.append(centered_centerlist_x[4] * alpha22)
-corrected_coords_x.append(centered_centerlist_x[5] * alpha12)
-corrected_coords_x.append(centered_centerlist_x[6] * alpha11)
-corrected_coords_x.append(centered_centerlist_x[7] * alpha10)
-corrected_coords_x.append(centered_centerlist_x[8] * alpha11)
-corrected_coords_x.append(centered_centerlist_x[9] * alpha12)
-corrected_coords_x.append(centered_centerlist_x[10] * alpha02)
-corrected_coords_x.append(centered_centerlist_x[11] * alpha01)
-corrected_coords_x.append(centered_centerlist_x[12])
-corrected_coords_x.append(centered_centerlist_x[13] * alpha01)
-corrected_coords_x.append(centered_centerlist_x[14] * alpha02)
-corrected_coords_x.append(centered_centerlist_x[15] * alpha12)
-corrected_coords_x.append(centered_centerlist_x[16] * alpha11)
-corrected_coords_x.append(centered_centerlist_x[17] * alpha10)
-corrected_coords_x.append(centered_centerlist_x[18] * alpha11)
-corrected_coords_x.append(centered_centerlist_x[19] * alpha12)
-corrected_coords_x.append(centered_centerlist_x[20] * alpha22)
-corrected_coords_x.append(centered_centerlist_x[21] * alpha21)
-corrected_coords_x.append(centered_centerlist_x[22] * alpha20)
-corrected_coords_x.append(centered_centerlist_x[23] * alpha21)
-corrected_coords_x.append(centered_centerlist_x[24] * alpha22)
+for coord in centered_coords:
+    # temp = cdist((coord), 'euclidean')
+    temp = coord[(0,1)]
+    alpha_current = np.arctan(np.sqrt(np.square(coord[(0,0)] * norm_factor) + np.square(coord[(0,1)] * norm_factor)) / 3469.1451497)
+    if alpha_current == 0:
+        factor = 0
+    else:
+        factor = np.tan(alpha_current) / np.sin(alpha_current)
+    temp = np.ravel(coord * factor)
+    # temp2 = temp[0,0], temp[0,1]
 
 
-corrected_coords_y.append(centered_centerlist_y[0] * alpha22)
-corrected_coords_y.append(centered_centerlist_y[1] * alpha21)
-corrected_coords_y.append(centered_centerlist_y[2] * alpha20)
-corrected_coords_y.append(centered_centerlist_y[3] * alpha21)
-corrected_coords_y.append(centered_centerlist_y[4] * alpha22)
-corrected_coords_y.append(centered_centerlist_y[5] * alpha12)
-corrected_coords_y.append(centered_centerlist_y[6] * alpha11)
-corrected_coords_y.append(centered_centerlist_y[7] * alpha10)
-corrected_coords_y.append(centered_centerlist_y[8] * alpha11)
-corrected_coords_y.append(centered_centerlist_y[9] * alpha12)
-corrected_coords_y.append(centered_centerlist_y[10] * alpha02)
-corrected_coords_y.append(centered_centerlist_y[11] * alpha01)
-corrected_coords_y.append(centered_centerlist_y[12])
-corrected_coords_y.append(centered_centerlist_y[13] * alpha01)
-corrected_coords_y.append(centered_centerlist_y[14] * alpha02)
-corrected_coords_y.append(centered_centerlist_y[15] * alpha12)
-corrected_coords_y.append(centered_centerlist_y[16] * alpha11)
-corrected_coords_y.append(centered_centerlist_y[17] * alpha10)
-corrected_coords_y.append(centered_centerlist_y[18] * alpha11)
-corrected_coords_y.append(centered_centerlist_y[19] * alpha12)
-corrected_coords_y.append(centered_centerlist_y[20] * alpha22)
-corrected_coords_y.append(centered_centerlist_y[21] * alpha21)
-corrected_coords_y.append(centered_centerlist_y[22] * alpha20)
-corrected_coords_y.append(centered_centerlist_y[23] * alpha21)
-corrected_coords_y.append(centered_centerlist_y[24] * alpha22)
+    corrected_coords.append(temp)
 
-
-corrected_coords_x_add = np.add(corrected_coords_x, center_coordinate[0])
-corrected_coords_y_add = np.add(corrected_coords_y, center_coordinate[1])
-centered_centerlist = np.hstack([corrected_coords_x_add, corrected_coords_y_add])
+corrected_coords_matrix = np.matrix(corrected_coords)
+centered_centerlist = np.add(corrected_coords_matrix[:,:], center_coordinate)
 
 big_center = np.multiply(centered_centerlist, 4)
 cropped_center = np.subtract(big_center, 800)
 for point in cropped_center:
 
-    cv2.circle(white_img, (int(point[0]), int(point[1])), 1, (0, 0, 255), 2)
+    cv2.circle(white_img, (int(point[0,0]), int(point[0,1])), 1, (0, 0, 255), 2)
 
-cv2.imshow('Gaze Koordinates',white_img)
+# cv2.imshow('Gaze Koordinates',white_img)
 
 src_Points = np.float32(centered_centerlist)
 
 # dst_Points = np.float32([[240, 135], [1680, 135], [1680, 945], [240, 945], [960, 540]])   # for 5 points
-dst_Points = np.float32([[0, 0],     [480, 0],   [960, 0],   [1440, 0],   [1920, 0],
+dst_Points = np.float32([[0, 0],     [480, 0],   [960, 0],   [1440, 0],   [1920, 0],        # for 25 points
                          [1920, 270],[1440, 270],[960, 270], [480, 270],  [0, 270],
                          [0, 540],   [480, 540], [960, 540], [1440, 540], [1920, 540],
                          [1920, 810],[1440, 810],[960, 810], [480, 810],  [0, 810],
-                         [0, 1080],  [480, 1080],[960, 1080],[1440, 1080],[1920, 1080]])     # for 25 points
+                         [0, 1080],  [480, 1080],[960, 1080],[1440, 1080],[1920, 1080]])
 
 H, mask = cv2.findHomography(src_Points, dst_Points) #, cv2.RANSAC, 5.0) cv2.LMEDS)             # find perspective transformation Matrix H
 
-pts = np.float32(src_Points).reshape(-1, 25, 2)
-
+pts = np.ravel(src_Points).reshape(-1, 25, 2)
 
 if H is not None:
     dst_Array = cv2.perspectiveTransform(pts, H)
@@ -168,12 +119,12 @@ if H is not None:
 else:
     print('No Homography Matrix created!')
 
-print dst_Points, '\n', dst_Array
+# print dst_Points, '\n', dst_Array
 error = np.matrix(np.subtract(dst_Points, dst_Array))            # difference between x,y coords of source points and calibrated points
 dist = np.sqrt(np.square(error[:, 0]) + np.square(error[:, 1]))  # euclidian distance between calibration points and mapped points
 
 # temp = np.sqrt(np.square(error))
-print 'distance', dist
+print 'distance', dist, '\n Max:', np.max(dist)
 
 cv2.waitKey(0)
 cv2.destroyAllWindows()
