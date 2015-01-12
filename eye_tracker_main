@@ -11,6 +11,7 @@ from scipy.spatial import distance
 # import functions
 import pupil_detection
 import rough_estimation
+import reconstruction
 
 filelist = []
 imglist = []
@@ -21,6 +22,14 @@ corrected_coords_x = []
 corrected_coords_y = []
 # Mat_centers = np.zeros((5, 3), np.float32)      # Zeilen, Spalten
 k = 0
+
+# target_points = np.float32([[240, 135], [1680, 135], [1680, 945], [240, 945], [960, 540]])   # for 5 points
+target_points = np.float32([[0, 0],     [480, 0],   [960, 0],   [1440, 0],   [1920, 0],        # for 25 points
+                         [1920, 270],[1440, 270],[960, 270], [480, 270],  [0, 270],
+                         [0, 540],   [480, 540], [960, 540], [1440, 540], [1920, 540],
+                         [1920, 810],[1440, 810],[960, 810], [480, 810],  [0, 810],
+                         [0, 1080],  [480, 1080],[960, 1080],[1440, 1080],[1920, 1080]])
+
 
 for root, dirs, files in os.walk(r'../data/25/right'):     # create filelist of source images
     for file in files:
@@ -43,10 +52,11 @@ white_img[:] = (255, 255, 255)
 
 for img in imglist:
 
-    #center = pupil_detection.center_of_mass(img)
-    #center = pupil_detection.hough_circle(img)
-    #center = rough_estimation.darkest_area(img)
-    center = pupil_detection.starburst(img)
+    center = pupil_detection.center_of_mass(img)
+    # center = pupil_detection.hough_circle(img)
+    # center = rough_estimation.darkest_area(img)
+    # center = pupil_detection.distance_transform(img)
+    # center = pupil_detection.starburst(img)
 
     if center is not None:
 
@@ -66,12 +76,9 @@ for img in imglist:
 # center pupil coordinates to origin
 center_coordinate = pupilcenter_list[12]
 pupilcenter_matrix = np.matrix(pupilcenter_list)
-# centered_centerlist_x = np.subtract(pupilcenter_matrix[:,0], center_coordinate[0])
-# centered_centerlist_y = np.subtract(pupilcenter_matrix[:,1], center_coordinate[1])
-# centered_coords = np.hstack([centered_centerlist_x, centered_centerlist_y])
-centered_coords = np.subtract(pupilcenter_matrix[:,:], center_coordinate)
+centered_coords = np.subtract(pupilcenter_matrix[:,:], (1920,1080))#centered_coords = np.subtract(pupilcenter_matrix[:,:], center_coordinate)
 
-alpha_corner = np.arctan(np.sqrt(np.square(960) + np.square(540)) / 3469.1451497)   #angle between monitor corner, monitor center and eye
+alpha_corner = np.arctan(np.sqrt(np.square(960) + np.square(540)) / 3469.1451497) #angle between monitor corner, monitor center and eye
 
 norm_factor = 960 / np.absolute(centered_coords[0,0])
 
@@ -90,7 +97,7 @@ for coord in centered_coords:
     corrected_coords.append(temp)
 
 corrected_coords_matrix = np.matrix(corrected_coords)
-centered_centerlist = np.add(corrected_coords_matrix[:,:], center_coordinate)
+centered_centerlist = np.add(corrected_coords_matrix[:,:], (1920,1080))
 
 big_center = np.multiply(centered_centerlist, 4)
 cropped_center = np.subtract(big_center, 800)
@@ -102,14 +109,14 @@ for point in cropped_center:
 
 src_Points = np.float32(centered_centerlist)
 
-# dst_Points = np.float32([[240, 135], [1680, 135], [1680, 945], [240, 945], [960, 540]])   # for 5 points
-dst_Points = np.float32([[0, 0],     [480, 0],   [960, 0],   [1440, 0],   [1920, 0],        # for 25 points
-                         [1920, 270],[1440, 270],[960, 270], [480, 270],  [0, 270],
-                         [0, 540],   [480, 540], [960, 540], [1440, 540], [1920, 540],
-                         [1920, 810],[1440, 810],[960, 810], [480, 810],  [0, 810],
-                         [0, 1080],  [480, 1080],[960, 1080],[1440, 1080],[1920, 1080]])
+sensor_coords = reconstruction.camera_calc(target_points)
+# print sensor_coords, '\n'
+# print centered_coords
+pupil_error = np.matrix(np.subtract(np.absolute(sensor_coords), np.absolute(centered_coords)))
+pupil_dist = np.sqrt(np.square(pupil_error[:, 0]) + np.square(pupil_error[:, 1]))
+print pupil_dist
 
-H, mask = cv2.findHomography(src_Points, dst_Points) #, cv2.RANSAC, 5.0) cv2.LMEDS)             # find perspective transformation Matrix H
+H, mask = cv2.findHomography(src_Points, target_points) #, cv2.RANSAC, 5.0) cv2.LMEDS)             # find perspective transformation Matrix H
 
 pts = np.ravel(src_Points).reshape(-1, 25, 2)
 
@@ -119,12 +126,12 @@ if H is not None:
 else:
     print('No Homography Matrix created!')
 
-# print dst_Points, '\n', dst_Array
-error = np.matrix(np.subtract(dst_Points, dst_Array))            # difference between x,y coords of source points and calibrated points
-dist = np.sqrt(np.square(error[:, 0]) + np.square(error[:, 1]))  # euclidian distance between calibration points and mapped points
+# print target_points, '\n', dst_Array
+error = np.matrix(np.subtract(target_points, dst_Array))            # difference between x,y coords of source points and calibrated points
+dist = np.sqrt(np.square(error[:, 0]) + np.square(error[:, 1]))     # euclidian distance between calibration points and mapped points
 
 # temp = np.sqrt(np.square(error))
-print 'distance', dist, '\n Max:', np.max(dist)
+# print 'distance', dist, '\n Max:', np.max(dist)
 
 cv2.waitKey(0)
 cv2.destroyAllWindows()
