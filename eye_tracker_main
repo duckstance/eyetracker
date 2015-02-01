@@ -22,16 +22,29 @@ corrected_coords_x = []
 corrected_coords_y = []
 # Mat_centers = np.zeros((5, 3), np.float32)      # Zeilen, Spalten
 k = 0
+pixelpitch_monitor = 0.0576510902161  # cm/px
+pixelpitch_sensor = 0.000142992861559
+distance_eye_monitor = 200.96330687589918072
+
+# Maya Kamera data
+focal_lenght = 3.8              # cm
+sensor_width = 0.549092588388   # cm
+sensor_width_px = 3840          # px
+sensor_height = 0.308864580969  # cm
+sensor_height_px = 2160         # px
+sensor_diagonal = 0.63          # cm
+
 
 # target_points = np.float32([[240, 135], [1680, 135], [1680, 945], [240, 945], [960, 540]])   # for 5 points
 target_points = np.float32([[0, 0],     [480, 0],   [960, 0],   [1440, 0],   [1920, 0],        # for 25 points
-                         [1920, 270],[1440, 270],[960, 270], [480, 270],  [0, 270],
-                         [0, 540],   [480, 540], [960, 540], [1440, 540], [1920, 540],
-                         [1920, 810],[1440, 810],[960, 810], [480, 810],  [0, 810],
-                         [0, 1080],  [480, 1080],[960, 1080],[1440, 1080],[1920, 1080]])
+                            [1920, 270],[1440, 270],[960, 270], [480, 270],  [0, 270],
+                            [0, 540],   [480, 540], [960, 540], [1440, 540], [1920, 540],
+                            [1920, 810],[1440, 810],[960, 810], [480, 810],  [0, 810],
+                            [0, 1080],  [480, 1080],[960, 1080],[1440, 1080],[1920, 1080]])
 
 
-for root, dirs, files in os.walk(r'../data/25/right'):     # create filelist of source images
+# load eye images
+for root, dirs, files in os.walk(r'../data/new_model/left'):     # create filelist of source images
     for file in files:
         if file.endswith('.tif'):
             filelist.append(root+'/'+file)
@@ -47,13 +60,14 @@ height, width = img_load.shape                              # get image size
 white_img = np.zeros((1080, 1920, 3), np.uint8)             # create blank image
 white_img[:] = (255, 255, 255)
 
-# pupil_detection.houghCircle(cimglist[0])
-
-
 for img in imglist:
 
+    ## pupil detection method
+
     center = pupil_detection.center_of_mass(img)
+    # center = pupil_detection.edge_ellipse_fit(img)
     # center = pupil_detection.hough_circle(img)
+    # center = pupil_detection.hough_ellipse(img)
     # center = rough_estimation.darkest_area(img)
     # center = pupil_detection.distance_transform(img)
     # center = pupil_detection.starburst(img)
@@ -74,30 +88,35 @@ for img in imglist:
     k += 1
 
 # center pupil coordinates to origin
-center_coordinate = pupilcenter_list[12]
 pupilcenter_matrix = np.matrix(pupilcenter_list)
-centered_coords = np.subtract(pupilcenter_matrix[:,:], (1920,1080))#centered_coords = np.subtract(pupilcenter_matrix[:,:], center_coordinate)
+centered_coords = np.subtract(pupilcenter_matrix[:,:], (width/2,height/2))  #centered_coords = np.subtract(pupilcenter_matrix[:,:], center_coordinate)
 
-alpha_corner = np.arctan(np.sqrt(np.square(960) + np.square(540)) / 3469.1451497) #angle between monitor corner, monitor center and eye
+# calculate target coordinates
+sensor_coords = reconstruction.camera_calc(target_points)
+# print sensor_coords, '\n'
+# print centered_coords
+pupil_error = np.matrix(np.subtract(np.absolute(sensor_coords), np.absolute(centered_coords)))
+pupil_dist = np.sqrt(np.square(pupil_error[:, 0]) + np.square(pupil_error[:, 1]))
+print pupil_dist
 
-norm_factor = 960 / np.absolute(centered_coords[0,0])
+# radial distortion correction
+
+# alpha_corner = np.arctan(np.sqrt(np.square(960) + np.square(540)) / 3469.1451497)  #angle between monitor corner, monitor center and eye
+
+norm_factor = 960 / np.absolute(sensor_coords[0,0])
 
 for coord in centered_coords:
-    # temp = cdist((coord), 'euclidean')
-    temp = coord[(0,1)]
-    alpha_current = np.arctan(np.sqrt(np.square(coord[(0,0)] * norm_factor) + np.square(coord[(0,1)] * norm_factor)) / 3469.1451497)
-    if alpha_current == 0:
+
+    alpha_current = np.arctan(np.sqrt((coord[(0,0)] * norm_factor) ** 2 + (coord[(0,1)] * norm_factor) ** 2) / (distance_eye_monitor / pixelpitch_monitor))
+    if alpha_current == 0:      # avoid division by 0
         factor = 0
     else:
         factor = np.tan(alpha_current) / np.sin(alpha_current)
-    temp = np.ravel(coord * factor)
-    # temp2 = temp[0,0], temp[0,1]
 
-
-    corrected_coords.append(temp)
+    corrected_coords.append(np.ravel(coord * factor))
 
 corrected_coords_matrix = np.matrix(corrected_coords)
-centered_centerlist = np.add(corrected_coords_matrix[:,:], (1920,1080))
+centered_centerlist = np.add(corrected_coords_matrix[:,:], (width/2,height/2))
 
 big_center = np.multiply(centered_centerlist, 4)
 cropped_center = np.subtract(big_center, 800)
@@ -108,13 +127,6 @@ for point in cropped_center:
 # cv2.imshow('Gaze Koordinates',white_img)
 
 src_Points = np.float32(centered_centerlist)
-
-sensor_coords = reconstruction.camera_calc(target_points)
-# print sensor_coords, '\n'
-# print centered_coords
-pupil_error = np.matrix(np.subtract(np.absolute(sensor_coords), np.absolute(centered_coords)))
-pupil_dist = np.sqrt(np.square(pupil_error[:, 0]) + np.square(pupil_error[:, 1]))
-print pupil_dist
 
 H, mask = cv2.findHomography(src_Points, target_points) #, cv2.RANSAC, 5.0) cv2.LMEDS)             # find perspective transformation Matrix H
 
@@ -132,6 +144,22 @@ dist = np.sqrt(np.square(error[:, 0]) + np.square(error[:, 1]))     # euclidian 
 
 # temp = np.sqrt(np.square(error))
 # print 'distance', dist, '\n Max:', np.max(dist)
+
+
+# # draw line between points
+# target_points_line = np.add(target_points[:,:], (10,10))
+# dst_Array_temp = np.add(dst_Array[:,:], (10,10))
+# dst_Array_line = dst_Array_temp[(0)]  # cut one dimension
+#
+#
+# print target_points[0]
+# for i in range(0, 25):
+#     target_point_tuple = int(target_points_line[i,0]), int(target_points_line[i,1])
+#     dst_Array_tuple = int(dst_Array_line[i,0]), int(dst_Array_line[i,1])
+#
+#     cv2.line(white_img, target_point_tuple, dst_Array_tuple, (255,0,0), 2)
+#
+# cv2.imshow('Difference',white_img)
 
 cv2.waitKey(0)
 cv2.destroyAllWindows()
