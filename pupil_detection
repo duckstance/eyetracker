@@ -3,31 +3,12 @@
 import cv2
 import cv2.cv as cv
 import numpy as np
+import time
+import matplotlib.pyplot as plt
 
 
-def hough_circle(img):
 
-    # cimg = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
-    scalefactor = 4     # upsample factor
-
-    # img_crop = img[460:650, 350:650]
-    # img_crop = img_grey[pupilCenter[0]-100:pupilCenter[0]+100, pupilCenter[1]-150:pupilCenter[1]+150]
-    # minisize = (img_crop.shape[1]*scalefactor, img_crop.shape[0]*scalefactor)
-    # img_big = cv2.resize(img_crop, minisize)
-
-    # canny = cv2.Canny(img, 30, 60)
-    # minisize = (int(canny.shape[1]*0.3), int(canny.shape[0]*0.3))
-    # img_small = cv2.resize(canny, minisize)
-
-    # cv2.imshow('canny', img_small)
-
-    # dp – Inverse ratio of the accumulator resolution, minDist – Minimum distance between the centers of the detected circles, param1: canny higher threshold, param2 – accumulator threshold
-    circles = cv2.HoughCircles(img, cv.CV_HOUGH_GRADIENT, 1, 100, param1=80, param2=25, minRadius=180, maxRadius=210)
-
-    circle = circles[0, 0]
-
-    return circle[0], circle[1]
-
+import rough_estimation
 
 def rough_pupil_center1(img):
 
@@ -41,13 +22,31 @@ def rough_pupil_center1(img):
 
     equ = cv2.equalizeHist(img_blur)
 
-    ret, thresh2 = cv2.threshold(img_blur, 30, 255, cv2.THRESH_BINARY_INV)
+    # ret, thresh2 = cv2.threshold(img_blur, 30, 255, cv2.THRESH_BINARY_INV)
 
-    cv2.imshow('blurred',img_blur)
-    cv2.imshow('tresh',thresh2)
+    # cv2.imshow('blurred',img_blur)
+    # cv2.imshow('tresh',thresh2)
 
 
     return center_coords
+
+
+def edge_ellipse_fit(img):
+
+    scalefactor = np.float(4)
+
+    img_resized = cv2.resize(img, (0, 0), fx=(1 / scalefactor), fy=(1 / scalefactor))
+
+    # cimg = cv2.cvtColor(img_resized, cv2.COLOR_GRAY2BGR)
+    canny = cv2.Canny(img_resized, 500, 1000)
+    # cv2.imshow('canny', canny)
+    index_y, index_x = np.where(canny == canny.max())
+    ellipse_points = np.vstack((index_x, index_y)).T
+    ellipse = cv2.fitEllipse(ellipse_points)
+    # cv2.ellipse(cimg, ellipse, (255, 0, 0), 1)
+    ellipse_center = ellipse[0]
+
+    return scalefactor * ellipse_center[0], scalefactor * ellipse_center[1]
 
 
 def center_of_mass(img):
@@ -64,16 +63,16 @@ def center_of_mass(img):
 
     cnt = contours[0]
 
-    cv2.drawContours(cimg, cnt, -1, (0, 255, 0), 2)
+    # cv2.drawContours(cimg, cnt, -1, (0, 255, 0), 2)
 
     # cv2.imshow('tresh', thresh2)
 
     M = cv2.moments(cnt[0])
 
-    cx = M['m10']/M['m00']
-    cy = M['m01']/M['m00']
+    cx = M['m10'] / M['m00']
+    cy = M['m01'] / M['m00']
 
-    cv2.circle(cimg, (int(cx), int(cy)), 1, (0, 0, 255), 2)
+    # cv2.circle(cimg, (int(cx), int(cy)), 1, (0, 0, 255), 2)
 
     # ellipse = cv2.fitEllipse(ellipse_points)
     # cv2.ellipse(cimg, ellipse, (255, 0, 0), 2)
@@ -81,11 +80,12 @@ def center_of_mass(img):
 
     return cx, cy
 
+
 def distance_transform(img):
 
-    scalefactor = np.float32(4)
+    scalefactor = np.float32(1)
 
-    img = cv2.imread('C:/Users/Arno/PycharmProjects/eyeTracker/data/eye_new/right/20141209_Ortho_1Cam__0800.png', 0)
+    # img = cv2.imread('C:/Users/Arno/PycharmProjects/eyeTracker/data/eye_new/right/20141209_Ortho_1Cam__0800.png', 0)
     cimg = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
 
     ret, thresh = cv2.threshold(img, 50, 255, cv2.THRESH_BINARY_INV)
@@ -96,4 +96,273 @@ def distance_transform(img):
 
     # cv2.imshow('Dist Transform', equalized)
 
-    return 1
+    index_y, index_x = np.where(equalized == equalized.max())
+
+    #calculate center of multiple minimums
+    center_coords = np.float(np.amin(index_x) + np.amax(index_x)) / 2, np.float(np.amin(index_y) + np.amax(index_y)) / 2
+
+    return scalefactor * center_coords[0],  scalefactor * center_coords[1]
+
+
+def hough_circle(img):
+
+    scalefactor = np.float(2)
+
+    img_resized = cv2.resize(img, (0, 0), fx=(1/scalefactor), fy=(1/scalefactor))
+    height, width = img_resized.shape
+
+    # canny = cv2.Canny(img_resized, 200, 400)
+    # cv2.imshow('canny', canny)
+
+    # dp – Inverse ratio of the accumulator resolution, minDist – Minimum distance between the centers of the detected circles, param1: canny higher threshold, param2 – accumulator threshold
+    circles = cv2.HoughCircles(img_resized, cv.CV_HOUGH_GRADIENT, 1, 20, param1=400, param2=20, minRadius=int(230 / scalefactor), maxRadius=int(250 / scalefactor))
+
+    if circles is not None:
+        circle = circles[0, 0]
+
+    else:
+        circle = (width / 2, height / 2)
+
+    return circle[0] * scalefactor, circle[1] * scalefactor
+
+
+def hough_ellipse(img):
+
+    from skimage import data, color
+    from skimage.filter import canny
+    from skimage.transform import hough_ellipse
+    from skimage.transform import resize
+    from skimage.draw import ellipse_perimeter
+    from skimage import io
+    from skimage.viewer import ImageViewer
+
+    scalefactor = np.float32(8)
+
+    cimg = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+    cimg_resized = cv2.resize(cimg, (0, 0), fx=(1/scalefactor), fy=(1/scalefactor))
+
+    cimg_gray = color.rgb2gray(cimg_resized)
+    edges = canny(cimg_gray, sigma=2.5, low_threshold=0.4, high_threshold=0.9)
+
+    # viewer = ImageViewer(edges)
+    # viewer.show()
+
+    # Perform a Hough Transform
+    # The accuracy corresponds to the bin size of a major axis.
+    # The value is chosen in order to get a single high accumulator.
+    # The threshold eliminates low accumulators
+    result = hough_ellipse(edges, accuracy=4, threshold=4, min_size=220 / scalefactor, max_size=260 / scalefactor)   # result = hough_ellipse(edges, accuracy=20, threshold=250, min_size=100, max_size=120)
+
+    result.sort(order='accumulator')
+
+    # Estimated parameters for the ellipse
+    best = result[-1]
+    yc = best[1] * scalefactor
+    xc = best[2] * scalefactor
+
+    return xc, yc
+
+
+def starburst(img_src):
+
+    # declarations and initialisations
+
+    # length of rays
+    raylength = 100
+    # factor for downscaling image
+    scalefactor = np.float(4)
+    # threshold for gradient detection trigger
+    gradient_thresh = 1
+    # angular steps between rays in degree
+    angular_steps = 10
+
+    tone_list = []
+    point_coords = []
+
+    # black_img = np.zeros((500, 500), np.uint8)             # create blank image
+
+    # img_src = cv2.imread('../data/eye_new/right/20141209_Ortho_1Cam__0600.png', 0)
+
+    # resize image
+    img_resized = cv2.resize(img_src, (0, 0), fx=(1/scalefactor), fy=(1/scalefactor))
+
+    # reduce noise with median blur filter
+    img = cv2.medianBlur(img_resized, 3)
+
+    # create color image copy
+    cimg = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+
+    # store image dimensions
+    height, width = img.shape
+
+    # detect rough pupil center for starburst starting point
+    rough_center = rough_estimation.darkest_area(img)
+    rough_center_x = rough_center[0]
+    rough_center_y = rough_center[1]
+
+    # if raylength exceeds image boundaries shorten length
+    if raylength > (width - rough_center_x-1) or raylength > rough_center_x-1:
+        if rough_center_x <= width - rough_center_x:
+            raylength = rough_center_x-1
+        else:
+            raylength = width - rough_center_x-1
+
+    if raylength > (height - rough_center_y) or raylength > rough_center_y:
+        if rough_center_y <= height - rough_center_y:
+            raylength = rough_center_y-1
+        else:
+            raylength = height - rough_center_y-1
+
+    # start timer to measure runtime duration
+    start = time.clock()
+
+    # iterate lines from 0 to 45 degree with stepsize angular_steps. Lines with higher angle are created by mirroring
+    for alpha in range(0, 46, angular_steps):
+
+        # preallocate and then reset temporary line arrays
+        line1 = np.zeros((raylength, 3), int)
+        line2 = np.zeros((raylength, 3), int)
+        line3 = np.zeros((raylength, 3), int)
+        line4 = np.zeros((raylength, 3), int)
+        line5 = np.zeros((raylength, 3), int)
+        line6 = np.zeros((raylength, 3), int)
+        line7 = np.zeros((raylength, 3), int)
+        line8 = np.zeros((raylength, 3), int)
+
+        for i in range(0, raylength):
+
+            # 1. Quadrant
+            y = np.int((np.tan(alpha * np.pi / 180) * -i) + rough_center_y)
+            x = i + rough_center_x
+
+            if 0 < y < height and 0 < x < width:
+                line1[i, 0] = img[y, x]
+                line1[i, 1] = x
+                line1[i, 2] = y
+                cimg[y, x] = 255
+
+            x = np.int((np.tan(alpha * np.pi / 180) * i) + rough_center_x)
+            y = -i + rough_center_y
+
+            if 0 < y < height and 0 < x < width:
+                line2[i, 0] = img[y, x]
+                line2[i, 1] = x
+                line2[i, 2] = y
+                cimg[y, x] = 255
+
+
+            # 2. Quadrant
+            y = np.int((np.tan(alpha * np.pi / 180) * -i) + rough_center_y)
+            x = -i + rough_center_x
+
+            if 0 < y < height and 0 < x < width:
+                line3[i, 0] = img[y, x]
+                line3[i, 1] = x
+                line3[i, 2] = y
+                cimg[y, x] = 255
+
+            x = np.int((np.tan(alpha * np.pi / 180) * -i) + rough_center_x)
+            y = -i + rough_center_y
+
+            if 0 < y < height and 0 < x < width:
+                line4[i, 0] = img[y, x]
+                line4[i, 1] = x
+                line4[i, 2] = y
+                cimg[y, x] = 255
+
+
+            # 3. quadrant
+            y = np.int((np.tan(-alpha * np.pi / 180) * -i) + rough_center_y)
+            x = -i + rough_center_x
+
+            if 0 < y < height and 0 < x < width:
+                line5[i, 0] = img[y, x]
+                line5[i, 1] = x
+                line5[i, 2] = y
+                cimg[y, x] = 255
+
+            x = np.int((np.tan(-alpha * np.pi / 180) * i) + rough_center_x)
+            y = i + rough_center_y
+
+            if 0 < y < height and 0 < x < width:
+                line6[i, 0] = img[y, x]
+                line6[i, 1] = x
+                line6[i, 2] = y
+                cimg[y, x] = 255
+
+
+            # 4. Quadrant
+            y = np.int((np.tan(alpha * np.pi / 180) * i) + rough_center_y)
+            x = i + rough_center_x
+
+            if 0 < y < height and 0 < x < width:
+                line7[i, 0] = img[y, x]
+                line7[i, 1] = x
+                line7[i, 2] = y
+                cimg[y, x] = 255
+
+            x = np.int((np.tan(alpha * np.pi / 180) * i) + rough_center_x)
+            y = i + rough_center_y
+
+            if 0 < y < height and 0 < x < width:
+                line8[i, 0] = img[y, x]
+                line8[i, 1] = x
+                line8[i, 2] = y
+                cimg[y, x] = 255
+
+
+        tone_list.append(line1)
+        tone_list.append(line2)
+        tone_list.append(line3)
+        tone_list.append(line4)
+        tone_list.append(line5)
+        tone_list.append(line6)
+        tone_list.append(line7)
+        tone_list.append(line8)
+
+
+    for k in tone_list:
+
+        gradient = np.absolute(np.gradient(k[:, 0]))
+        # print k[:, 0], '\n', gradient
+        # plt.plot(gradient)
+        # plt.ylabel('some numbers')
+        # plt.show()
+
+        position = np.where(gradient == gradient.max())
+        first_coord = position[0]
+        # take center for multiple gradient maxima
+        center_1 = ((np.amin(first_coord) + np.amax(first_coord)) / 2)
+
+        edge_point = k[center_1]
+        edge_coord_x = edge_point[1]
+        edge_coord_y = edge_point[2]
+
+        if 1 < edge_coord_x < width-1 and 1 < edge_coord_y < height-1 and gradient.max() > gradient_thresh:
+            edge_temp = edge_coord_x, edge_coord_y
+            point_coords.append(edge_temp)
+
+
+        cimg[edge_coord_y, edge_coord_x] = (0, 0, 255)
+
+
+    # fit ellipse
+
+
+    if len(point_coords) != 0:
+        ellipse_points = np.matrix(point_coords)
+        ellipse = cv2.fitEllipse(ellipse_points)
+        cv2.ellipse(cimg, ellipse, (255, 0, 0), 1)
+        ellipse_center = ellipse[0]
+
+    else:
+        print('No Edge Points detected!')
+        ellipse_center = (0,0)
+
+
+    # cv2.imshow('black', cimg)
+    elapsed = (time.clock() - start)
+    # print 'elapsed time:', elapsed
+
+
+    return scalefactor * ellipse_center[0], scalefactor * ellipse_center[1]
