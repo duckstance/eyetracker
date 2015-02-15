@@ -7,11 +7,12 @@ import glob
 import os
 from scipy.spatial.distance import cdist
 from scipy.spatial import distance
+import matplotlib.pyplot as plt
 
 # import functions
 import pupil_detection
 import rough_estimation
-import reconstruction
+import evaluation
 
 filelist = []
 imglist = []
@@ -21,7 +22,7 @@ corrected_coords = []
 corrected_coords_x = []
 corrected_coords_y = []
 # Mat_centers = np.zeros((5, 3), np.float32)      # Zeilen, Spalten
-k = 0
+
 pixelpitch_monitor = 0.0576510902161  # cm/px
 pixelpitch_sensor = 0.000142992861559
 distance_eye_monitor = 200.96330687589918072
@@ -35,16 +36,16 @@ sensor_height_px = 2160         # px
 sensor_diagonal = 0.63          # cm
 
 
-# target_points = np.float32([[240, 135], [1680, 135], [1680, 945], [240, 945], [960, 540]])   # for 5 points
-target_points = np.float32([[0, 0],     [480, 0],   [960, 0],   [1440, 0],   [1920, 0],        # for 25 points
-                            [1920, 270],[1440, 270],[960, 270], [480, 270],  [0, 270],
-                            [0, 540],   [480, 540], [960, 540], [1440, 540], [1920, 540],
-                            [1920, 810],[1440, 810],[960, 810], [480, 810],  [0, 810],
-                            [0, 1080],  [480, 1080],[960, 1080],[1440, 1080],[1920, 1080]])
+# calib_points = np.float32([[240, 135], [1680, 135], [1680, 945], [240, 945], [960, 540]])   # for 5 points
+calib_points = np.float32([[0, 0],     [480, 0],   [960, 0],   [1440, 0],   [1920, 0],        # for 25 points
+                           [1920, 270],[1440, 270],[960, 270], [480, 270],  [0, 270],
+                           [0, 540],   [480, 540], [960, 540], [1440, 540], [1920, 540],
+                           [1920, 810],[1440, 810],[960, 810], [480, 810],  [0, 810],
+                           [0, 1080],  [480, 1080],[960, 1080],[1440, 1080],[1920, 1080]])
 
 
-# load eye images
-for root, dirs, files in os.walk(r'../data/new_model/left'):     # create filelist of source images
+## --- load eye images ---
+for root, dirs, files in os.walk(r'../data/ortho_z25cm_f38mm/left'):     # create filelist of source images
     for file in files:
         if file.endswith('.tif'):
             filelist.append(root+'/'+file)
@@ -57,57 +58,60 @@ for imagefile in filelist:                                  # load source images
     cimglist.append(cimg)
 
 height, width = img_load.shape                              # get image size
-white_img = np.zeros((1080, 1920, 3), np.uint8)             # create blank image
-white_img[:] = (255, 255, 255)
 
 for img in imglist:
 
-    ## pupil detection method
+    ## --- pupil detection method ---
 
-    center = pupil_detection.center_of_mass(img)
+    # center = pupil_detection.darkest_pixel(img)
     # center = pupil_detection.edge_ellipse_fit(img)
+    center = pupil_detection.center_of_mass(img)
+    # center = pupil_detection.distance_transform(img)
     # center = pupil_detection.hough_circle(img)
     # center = pupil_detection.hough_ellipse(img)
-    # center = rough_estimation.darkest_area(img)
-    # center = pupil_detection.distance_transform(img)
     # center = pupil_detection.starburst(img)
 
     if center is not None:
-
         pupilcenter_list.append(center)
-
-        big_center = np.multiply(center, 4)
-        cropped_center = np.subtract(big_center, 800)
-        # draw the center of the circle
-        cv2.circle(cimglist[k], (int(center[0]), int(center[1])), 3, (0, 0, 255), 3)
-
-        # cv2.imshow(str(k),cimglist[k])
-        # cv2.circle(white_img, (int(cropped_center[0]), int(cropped_center[1])), 1, (0, 0, 255), 2)
     else:
         print('No Circles Detected!')
-    k += 1
 
 # center pupil coordinates to origin
-pupilcenter_matrix = np.matrix(pupilcenter_list)
-centered_coords = np.subtract(pupilcenter_matrix[:,:], (width/2,height/2))  #centered_coords = np.subtract(pupilcenter_matrix[:,:], center_coordinate)
+pupilcenter_imgcoords = np.ravel(pupilcenter_list).reshape(25, 2)
+
+pupil_coords_x = np.subtract(np.reshape(pupilcenter_imgcoords[:, 0],(25, 1)), width) * (-1)     # flip x-coordinates
+pupil_coords_y = np.subtract(np.reshape(pupilcenter_imgcoords[:, 1],(25, 1)), height) * (-1)    # flip y-coordinates
+pupilcenter_coords = np.hstack((pupil_coords_x, pupil_coords_y))    # standard XY-Coordinate System
+
+pupil_centered = np.subtract(pupilcenter_coords[:,:], (width / 2, height / 2))  #pupil_coords = np.subtract(pupilcenter_matrix[:,:], center_coordinate)
+
+## -- plot --
+# pupil_coords_x = np.ravel(pupil_centered[:, 0]).reshape(25, 1)
+# pupil_coords_y = np.ravel(pupil_centered[:, 1]).reshape(25, 1)
+#
+# plt.figure(num=None, figsize=(16, 9), dpi=80, facecolor='w', edgecolor='k')
+# plt.plot(pupil_coords_x, pupil_coords_y, 'ko')
+# # plt.axis([-5, 5, -5, 5])
+# plt.xlabel('x-Richtung')
+# plt.ylabel('y-Richtung')
+#
+# for i in range(1,26):
+#     plt.annotate(i, xy=(pupil_coords_x[i - 1], pupil_coords_y[i - 1]), color='r')
+#
+# plt.show()
 
 # calculate target coordinates
-sensor_coords = reconstruction.camera_calc(target_points)
-# print sensor_coords, '\n'
-# print centered_coords
-pupil_error = np.matrix(np.subtract(np.absolute(sensor_coords), np.absolute(centered_coords)))
-pupil_dist = np.sqrt(np.square(pupil_error[:, 0]) + np.square(pupil_error[:, 1]))
-print pupil_dist
+[sensor_coords_left, sensor_coords_right] = evaluation.calibpoint_evaluation(calib_points, pupil_centered)
 
-# radial distortion correction
+## --- radial distortion correction ---
 
 # alpha_corner = np.arctan(np.sqrt(np.square(960) + np.square(540)) / 3469.1451497)  #angle between monitor corner, monitor center and eye
 
-norm_factor = 960 / np.absolute(sensor_coords[0,0])
+norm_factor = 960 / np.absolute(sensor_coords_left[0,0])
 
-for coord in centered_coords:
+for coord in pupil_centered:
 
-    alpha_current = np.arctan(np.sqrt((coord[(0,0)] * norm_factor) ** 2 + (coord[(0,1)] * norm_factor) ** 2) / (distance_eye_monitor / pixelpitch_monitor))
+    alpha_current = np.arctan(np.sqrt((coord[0] * norm_factor) ** 2 + (coord[1] * norm_factor) ** 2) / (distance_eye_monitor / pixelpitch_monitor))
     if alpha_current == 0:      # avoid division by 0
         factor = 0
     else:
@@ -118,17 +122,10 @@ for coord in centered_coords:
 corrected_coords_matrix = np.matrix(corrected_coords)
 centered_centerlist = np.add(corrected_coords_matrix[:,:], (width/2,height/2))
 
-big_center = np.multiply(centered_centerlist, 4)
-cropped_center = np.subtract(big_center, 800)
-for point in cropped_center:
-
-    cv2.circle(white_img, (int(point[0,0]), int(point[0,1])), 1, (0, 0, 255), 2)
-
-# cv2.imshow('Gaze Koordinates',white_img)
 
 src_Points = np.float32(centered_centerlist)
 
-H, mask = cv2.findHomography(src_Points, target_points) #, cv2.RANSAC, 5.0) cv2.LMEDS)             # find perspective transformation Matrix H
+H, mask = cv2.findHomography(src_Points, calib_points) #, cv2.RANSAC, 5.0) cv2.LMEDS)             # find perspective transformation Matrix H
 
 pts = np.ravel(src_Points).reshape(-1, 25, 2)
 
@@ -138,28 +135,14 @@ if H is not None:
 else:
     print('No Homography Matrix created!')
 
-# print target_points, '\n', dst_Array
-error = np.matrix(np.subtract(target_points, dst_Array))            # difference between x,y coords of source points and calibrated points
+# print calib_points, '\n', dst_Array
+error = np.matrix(np.subtract(calib_points, dst_Array))            # difference between x,y coords of source points and calibrated points
 dist = np.sqrt(np.square(error[:, 0]) + np.square(error[:, 1]))     # euclidian distance between calibration points and mapped points
 
-# temp = np.sqrt(np.square(error))
+## calculate distance
+# distance = evaluation.distance_calc(dst_Array)
+
 # print 'distance', dist, '\n Max:', np.max(dist)
-
-
-# # draw line between points
-# target_points_line = np.add(target_points[:,:], (10,10))
-# dst_Array_temp = np.add(dst_Array[:,:], (10,10))
-# dst_Array_line = dst_Array_temp[(0)]  # cut one dimension
-#
-#
-# print target_points[0]
-# for i in range(0, 25):
-#     target_point_tuple = int(target_points_line[i,0]), int(target_points_line[i,1])
-#     dst_Array_tuple = int(dst_Array_line[i,0]), int(dst_Array_line[i,1])
-#
-#     cv2.line(white_img, target_point_tuple, dst_Array_tuple, (255,0,0), 2)
-#
-# cv2.imshow('Difference',white_img)
 
 cv2.waitKey(0)
 cv2.destroyAllWindows()
