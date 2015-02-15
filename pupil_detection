@@ -10,9 +10,13 @@ import matplotlib.pyplot as plt
 
 import rough_estimation
 
-def rough_pupil_center1(img):
 
-    img_blur = cv2.blur(img, (50,50))
+def darkest_pixel(img):
+    scalefactor = np.float(4)
+    # img_blur = cv2.GaussianBlur(img, (501,501), 50)
+    img_blur = cv2.blur(img, (400,400))
+    img_resized = cv2.resize(img_blur, (0, 0), fx=(1 / scalefactor), fy=(1 / scalefactor))
+    # cv2.imshow('blurred',img_resized)
 
     #find position of darkest area
     index_y, index_x = np.where(img_blur == img_blur.min())
@@ -20,13 +24,9 @@ def rough_pupil_center1(img):
     #calculate center of multiple minimums
     center_coords = ([(np.amin(index_x) + np.amax(index_x)) / 2, (np.amin(index_y) + np.amax(index_y)) / 2])
 
-    equ = cv2.equalizeHist(img_blur)
-
+    # equ = cv2.equalizeHist(img_blur)
     # ret, thresh2 = cv2.threshold(img_blur, 30, 255, cv2.THRESH_BINARY_INV)
-
-    # cv2.imshow('blurred',img_blur)
     # cv2.imshow('tresh',thresh2)
-
 
     return center_coords
 
@@ -35,31 +35,30 @@ def edge_ellipse_fit(img):
 
     scalefactor = np.float(4)
 
-    img_resized = cv2.resize(img, (0, 0), fx=(1 / scalefactor), fy=(1 / scalefactor))
-
     # cimg = cv2.cvtColor(img_resized, cv2.COLOR_GRAY2BGR)
-    canny = cv2.Canny(img_resized, 500, 1000)
-    # cv2.imshow('canny', canny)
+    canny = cv2.Canny(img, 500, 1000)
+    # img_resized = cv2.resize(canny, (0, 0), fx=(1 / scalefactor), fy=(1 / scalefactor))
+    # cv2.imshow('canny', img_resized)
+
     index_y, index_x = np.where(canny == canny.max())
     ellipse_points = np.vstack((index_x, index_y)).T
     ellipse = cv2.fitEllipse(ellipse_points)
     # cv2.ellipse(cimg, ellipse, (255, 0, 0), 1)
     ellipse_center = ellipse[0]
 
-    return scalefactor * ellipse_center[0], scalefactor * ellipse_center[1]
+    return ellipse_center[0], ellipse_center[1]
 
 
 def center_of_mass(img):
 
+    # cimg = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+    # img_blur = cv2.blur(img, (50, 50))      #
+    # img_gaussian = cv2.GaussianBlur(img, (11, 11), 0)
 
-    cimg = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
-    img_blur = cv2.blur(img, (50, 50))      #
-    img_gaussian = cv2.GaussianBlur(img, (11, 11), 0)
+    ret, thresh = cv2.threshold(img, 30, 255, cv2.THRESH_BINARY_INV)
+    # cv2.imshow('blurred', thresh)
 
-    ret, thresh2 = cv2.threshold(img_gaussian, 50, 255, cv2.THRESH_BINARY_INV)
-    # cv2.imshow('blurred', thresh2)
-
-    contours = cv2.findContours(thresh2, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    contours = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
     cnt = contours[0]
 
@@ -86,12 +85,12 @@ def distance_transform(img):
     scalefactor = np.float32(1)
 
     # img = cv2.imread('C:/Users/Arno/PycharmProjects/eyeTracker/data/eye_new/right/20141209_Ortho_1Cam__0800.png', 0)
-    cimg = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+    # cimg = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
 
     ret, thresh = cv2.threshold(img, 50, 255, cv2.THRESH_BINARY_INV)
-    img_small = cv2.resize(thresh, (0, 0), fx=(1/scalefactor), fy=(1/scalefactor))
+    img_small = cv2.resize(thresh, (0, 0), fx=(1 / scalefactor), fy=(1 / scalefactor))
 
-    dist_transform = cv2.distanceTransform(img_small, cv2.cv.CV_DIST_L2, 5)
+    dist_transform = cv2.distanceTransform(thresh, cv2.cv.CV_DIST_L2, 5)
     equalized = cv2.normalize(dist_transform, alpha=0., beta=1., norm_type=cv2.NORM_MINMAX)
 
     # cv2.imshow('Dist Transform', equalized)
@@ -101,12 +100,12 @@ def distance_transform(img):
     #calculate center of multiple minimums
     center_coords = np.float(np.amin(index_x) + np.amax(index_x)) / 2, np.float(np.amin(index_y) + np.amax(index_y)) / 2
 
-    return scalefactor * center_coords[0],  scalefactor * center_coords[1]
+    return center_coords[0], center_coords[1]
 
 
 def hough_circle(img):
 
-    scalefactor = np.float(2)
+    scalefactor = np.float(1)
 
     img_resized = cv2.resize(img, (0, 0), fx=(1/scalefactor), fy=(1/scalefactor))
     height, width = img_resized.shape
@@ -136,7 +135,7 @@ def hough_ellipse(img):
     from skimage import io
     from skimage.viewer import ImageViewer
 
-    scalefactor = np.float32(8)
+    scalefactor = np.float32(2)     # 2:            Mean Error:  1.5270172275 Standardabweichung:  0.373837296196
 
     cimg = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
     cimg_resized = cv2.resize(cimg, (0, 0), fx=(1/scalefactor), fy=(1/scalefactor))
@@ -167,10 +166,12 @@ def starburst(img_src):
 
     # declarations and initialisations
 
-    # length of rays
-    raylength = 100
     # factor for downscaling image
-    scalefactor = np.float(4)
+    scalefactor = np.float(1)
+
+    # length of rays
+    raylength = int(400 / scalefactor)
+
     # threshold for gradient detection trigger
     gradient_thresh = 1
     # angular steps between rays in degree
