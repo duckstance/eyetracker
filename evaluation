@@ -18,16 +18,16 @@ def calibpoint_evaluation(calib_points, pupil_centered):
     monitor_height = 62.2631774333
     monitor_width = 110.690093215
     monitor_diagonal = 127
-    pixelpitch_monitor = 0.0576510902161  # cm/px
+    pixelpitch_monitor = 0.058  # 0.0576510902161  # cm/px
 
     # Maya Kamera data / all in cm
-    focal_lenght = 3.8 #3.8 #0.5
-    sensor_width = 0.549092588388
+    focal_lenght = 4.0 #3.8 #0.5
+    sensor_width = 0.54864 #0.549092588388cm   # 0,21617771023622047244094488188976"
     sensor_width_px = 3840
-    sensor_height = 0.308864580969
+    sensor_height = 0.30988 #0.308864580969  # 0,1215999622047244094488188976378"
     sensor_height_px = 2160
     sensor_diagonal = 0.63
-    pixelpitch_sensor = 0.000142992861559
+    pixelpitch_sensor = 0.00015875 #0.000142992861559
 
     # eye data
     eye_radius = 1.165
@@ -37,13 +37,15 @@ def calibpoint_evaluation(calib_points, pupil_centered):
     # distance_pupill_camera =
     distance_eye_camera = 25 #25 #4
     # distance_pupill_monitor =
-    distance_eye_pupill = 0.99566 #z25: 0.99566 #z4: 0.9851
+    distance_eye_pupill = 1 #z25: 0.99566 #z4: 0.9851
     distance_eye_monitor = 200
 
     for point in calib_points:
 
-        x_B = (point[0] - 960 + 1.5) * pixelpitch_monitor
-        y_B = (point[1] - 540 - 1.5) * pixelpitch_monitor * (-1)      # *-1 to invert the values to get them in a standard coordinate system
+        x_B = (point[0] - 960 - 0) * pixelpitch_monitor
+        y_B = (point[1] - 540 + 0) * pixelpitch_monitor * (-1)      # *-1 to invert the values to get them in a standard coordinate system
+        # x_B = round(x_B_temp, 3)
+        # y_B = round(y_B_temp, 3)
         b = eye_offset
         z_B = distance_eye_monitor
         r = distance_eye_pupill
@@ -75,7 +77,7 @@ def calibpoint_evaluation(calib_points, pupil_centered):
     sensor_coords_left = np.ravel(sensor_coords_list_left).reshape(25, 2)
     sensor_coords_right = np.ravel(sensor_coords_list_right).reshape(25, 2)
 
-    pupil_error = np.subtract(sensor_coords_left, pupil_centered)
+    pupil_error = np.subtract(sensor_coords_left, pupil_centered)   # choose left or right eye coords
     # print pupil_centered
     pupil_error_x = np.ravel(pupil_error[:, 0]).reshape(25, 1)
     pupil_error_y = np.ravel(pupil_error[:, 1]).reshape(25, 1)
@@ -105,16 +107,16 @@ def calibpoint_evaluation(calib_points, pupil_centered):
     # print loaded_edist
 
     ## plot
-    plt.figure(num=None, figsize=(8, 8), dpi=80, facecolor='w', edgecolor='k')
-    plt.plot(pupil_error_x,pupil_error_y, 'ko')
-    # plt.axis([-0.5, 0.5, -0.5, 0.5])
-    plt.xlabel('x-Direction')
-    plt.ylabel('y-Direction')
-
-    for i in range(1,26):
-        plt.annotate(i, xy=(pupil_error_x[i - 1], pupil_error_y[i - 1]), xytext = (-0.05, 0.05), textcoords = 'offset points', ha = 'right', va = 'bottom', color='r')
-
-    plt.show()
+    # plt.figure(num=None, figsize=(8, 8), dpi=80, facecolor='w', edgecolor='k')
+    # plt.plot(pupil_error_x,pupil_error_y, 'ko')
+    # # plt.axis([-0.5, 0.5, -0.5, 0.5])
+    # plt.xlabel('x-Direction')
+    # plt.ylabel('y-Direction')
+    #
+    # for i in range(1,26):
+    #     plt.annotate(i, xy=(pupil_error_x[i - 1], pupil_error_y[i - 1]), xytext = (-0.05, 0.05), textcoords = 'offset points', ha = 'right', va = 'bottom', color='r')
+    #
+    # plt.show()
 
     ## --- saving data to file ---
     # f = open("../data/accuracy/darkest_pixel.txt", "w")
