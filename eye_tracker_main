@@ -45,7 +45,7 @@ calib_points = np.float32([[0, 0],     [480, 0],   [960, 0],   [1440, 0],   [192
 
 
 ## --- load eye images ---
-for root, dirs, files in os.walk(r'../data/ortho_z25cm_f38mm/left'):     # create filelist of source images
+for root, dirs, files in os.walk(r'../data/ortho_z25_f40_s024/left'):     # create filelist of source images
     for file in files:
         if file.endswith('.tif'):
             filelist.append(root+'/'+file)
@@ -83,7 +83,7 @@ pupil_coords_x = np.subtract(np.reshape(pupilcenter_imgcoords[:, 0],(25, 1)), wi
 pupil_coords_y = np.subtract(np.reshape(pupilcenter_imgcoords[:, 1],(25, 1)), height) * (-1)    # flip y-coordinates
 pupilcenter_coords = np.hstack((pupil_coords_x, pupil_coords_y))    # standard XY-Coordinate System
 
-pupil_centered = np.subtract(pupilcenter_coords[:,:], (width / 2, height / 2))  #pupil_coords = np.subtract(pupilcenter_matrix[:,:], center_coordinate)
+pupil_centered = np.subtract(pupilcenter_coords[:,:], ((width / 2)+0.5, (height / 2)+0.5))  #pupil_coords = np.subtract(pupilcenter_matrix[:,:], center_coordinate)
 
 ## -- plot --
 # pupil_coords_x = np.ravel(pupil_centered[:, 0]).reshape(25, 1)
@@ -120,7 +120,7 @@ for coord in pupil_centered:
     corrected_coords.append(np.ravel(coord * factor))
 
 corrected_coords_matrix = np.matrix(corrected_coords)
-centered_centerlist = np.add(corrected_coords_matrix[:,:], (width/2,height/2))
+centered_centerlist = np.add(corrected_coords_matrix[:,:], (width / 2,height / 2))
 
 
 src_Points = np.float32(centered_centerlist)
@@ -142,7 +142,7 @@ dist = np.sqrt(np.square(error[:, 0]) + np.square(error[:, 1]))     # euclidian 
 ## calculate distance
 # distance = evaluation.distance_calc(dst_Array)
 
-# print 'distance', dist, '\n Max:', np.max(dist)
+print 'distance', dist, '\n Max:', np.max(dist)
 
 cv2.waitKey(0)
 cv2.destroyAllWindows()
