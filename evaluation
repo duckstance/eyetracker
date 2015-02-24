@@ -10,7 +10,7 @@ import cPickle as pickle
 import rough_estimation
 
 
-def calibpoint_evaluation(calib_points, pupil_centered):
+def calibpoint_evaluation(calib_points, pupil_measured):
 
     sensor_coords_list_left = []
     sensor_coords_list_right = []
@@ -21,13 +21,13 @@ def calibpoint_evaluation(calib_points, pupil_centered):
     pixelpitch_monitor = 0.058  # 0.0576510902161  # cm/px
 
     # Maya Kamera data / all in cm
-    focal_lenght = 4.0 #3.8 #0.5
+    focal_length = 0.5 #3.9938  #z4: 0.4938
     sensor_width = 0.54864 #0.549092588388cm   # 0,21617771023622047244094488188976"
     sensor_width_px = 3840
     sensor_height = 0.30988 #0.308864580969  # 0,1215999622047244094488188976378"
     sensor_height_px = 2160
     sensor_diagonal = 0.63
-    pixelpitch_sensor = 0.00015875 #0.000142992861559
+    pixelpitch_sensor = 0.00015875 #0.000142992861559 # 0.00015875 0001607
 
     # eye data
     eye_radius = 1.165
@@ -35,15 +35,15 @@ def calibpoint_evaluation(calib_points, pupil_centered):
     # pupill_radius = 0.232
     eye_offset = 3.2
     # distance_pupill_camera =
-    distance_eye_camera = 25 #25 #4
+    distance_eye_camera = 4.038 #.038 #25 #4.03805
     # distance_pupill_monitor =
     distance_eye_pupill = 1 #z25: 0.99566 #z4: 0.9851
-    distance_eye_monitor = 200
+    distance_eye_monitor = 200.0
 
     for point in calib_points:
 
-        x_B = (point[0] - 960 - 0) * pixelpitch_monitor
-        y_B = (point[1] - 540 + 0) * pixelpitch_monitor * (-1)      # *-1 to invert the values to get them in a standard coordinate system
+        x_B = (point[0] - 960) * pixelpitch_monitor
+        y_B = (point[1] - 540) * pixelpitch_monitor * (-1)      # *-1 to invert the values to get them in a standard coordinate system
         # x_B = round(x_B_temp, 3)
         # y_B = round(y_B_temp, 3)
         b = eye_offset
@@ -56,8 +56,8 @@ def calibpoint_evaluation(calib_points, pupil_centered):
         y_P_left = k_left * y_B
         z_P_left = distance_eye_camera - (k_left * z_B)
 
-        x_S_left = x_P_left * focal_lenght / (z_P_left * pixelpitch_sensor)
-        y_S_left = y_P_left * focal_lenght / (z_P_left * pixelpitch_sensor)
+        x_S_left = x_P_left * focal_length / (z_P_left * pixelpitch_sensor)
+        y_S_left = y_P_left * focal_length / (z_P_left * pixelpitch_sensor)
 
         coords_left = (x_S_left, y_S_left)
         sensor_coords_list_left.append(coords_left)
@@ -68,17 +68,17 @@ def calibpoint_evaluation(calib_points, pupil_centered):
         y_P_right = k_right * y_B
         z_P_right = distance_eye_camera - (k_right * z_B)
 
-        x_S_right = x1_right * focal_lenght / (z_P_right * pixelpitch_sensor)
-        y_S_right = y_P_right * focal_lenght / (z_P_right * pixelpitch_sensor)
+        x_S_right = x1_right * focal_length / (z_P_right * pixelpitch_sensor)
+        y_S_right = y_P_right * focal_length / (z_P_right * pixelpitch_sensor)
 
         coords_right = (x_S_right, y_S_right)
         sensor_coords_list_right.append(coords_right)
 
-    sensor_coords_left = np.ravel(sensor_coords_list_left).reshape(25, 2)
-    sensor_coords_right = np.ravel(sensor_coords_list_right).reshape(25, 2)
+    pupil_calculated_left = np.ravel(sensor_coords_list_left).reshape(25, 2)
+    pupil_calculated_right = np.ravel(sensor_coords_list_right).reshape(25, 2)
 
-    pupil_error = np.subtract(sensor_coords_left, pupil_centered)   # choose left or right eye coords
-    # print pupil_centered
+    pupil_error = np.subtract(pupil_measured, pupil_calculated_left)   # choose left or right eye coords
+    # print pupil_measured
     pupil_error_x = np.ravel(pupil_error[:, 0]).reshape(25, 1)
     pupil_error_y = np.ravel(pupil_error[:, 1]).reshape(25, 1)
     pupil_edist = np.sqrt(np.square(pupil_error_x) + np.square(pupil_error_y))
@@ -95,41 +95,46 @@ def calibpoint_evaluation(calib_points, pupil_centered):
     print 'Std:','\t\t', pupil_std
     print 'Median:','\t', pupil_median
 
-    ## --- Saving the objects ---
-    with open('../data/accuracy/orthodata.pickle', 'w') as file:
-        pickle.dump([pupil_error, pupil_edist, pupil_edist_min, pupil_edist_max, pupil_mean_error, pupil_std, pupil_median], file)
+    ## plot
+
+    plt.figure(num=None,  dpi=140, facecolor='w', edgecolor='k') #figsize=(7, 7),
+    plt.grid(color='0.5')
+    plt.axhline(0, color='k')
+    plt.axvline(0, color='k')
+
+    plt.plot(pupil_error_x,pupil_error_y, 'kx')
+    # plt.axis([-0.1, 0.1, -0.1, 0.1])
+
+    plt.xlabel('$\Delta x$ (Pixel)')
+    plt.ylabel('$\Delta y$ (Pixel)')
+
+    for i in range(1,26):
+        plt.annotate(i, xy=(pupil_error_x[i - 1], pupil_error_y[i - 1]), xytext = (-0.2, 0.2), textcoords = 'offset points', ha = 'right', va = 'bottom', color='0.4')
+    # plt.savefig('foo.pdf', figsize=(7, 7), bbox_inches='tight')
+    plt.show()
+
+    # ## --- Saving the objects ---
+    # with open('../data/accuracy/ortho_z25_f40_centermass_original.pickle', 'w') as file:
+    #     pickle.dump([pupil_error, pupil_edist, pupil_edist_min, pupil_edist_max, pupil_mean_error, pupil_std, pupil_median], file)
 
     ## --- Loading the objects ---
     # with open('data.pickle') as file:
     #     pupil_error, pupil_edist, pupil_edist_min, pupil_edist_max, pupil_mean_error, pupil_std, pupil_median = pickle.load(file)
-
-
     # print loaded_edist
 
-    ## plot
-    # plt.figure(num=None, figsize=(8, 8), dpi=80, facecolor='w', edgecolor='k')
-    # plt.plot(pupil_error_x,pupil_error_y, 'ko')
-    # # plt.axis([-0.5, 0.5, -0.5, 0.5])
-    # plt.xlabel('x-Direction')
-    # plt.ylabel('y-Direction')
-    #
-    # for i in range(1,26):
-    #     plt.annotate(i, xy=(pupil_error_x[i - 1], pupil_error_y[i - 1]), xytext = (-0.05, 0.05), textcoords = 'offset points', ha = 'right', va = 'bottom', color='r')
-    #
-    # plt.show()
-
     ## --- saving data to file ---
-    # f = open("../data/accuracy/darkest_pixel.txt", "w")
-    # number = 1
-    # for save in pupil_edist:
-    #
-    #     f.write(str(number) + '\t' + str(save) + "\n")  # str() converts to string
-    #
-    #     number += 1
-    # f.write('Min\t' + str(pupil_edist_min) + "\n" + 'Max\t' + str(pupil_edist_max) + "\n" + 'Mean\t' + str(pupil_mean_error) + "\n" + 'Std\t' + str(pupil_std))
-    # f.close()
+    f = open("../data/accuracy/max_genauigkeit/z4.txt", "w")
+    number = 1
+    for save in pupil_edist:
 
-    return sensor_coords_left, sensor_coords_right
+        f.write(str(number) + '\t' + str(save) + "\n")  # str() converts to string
+
+        number += 1
+    f.write('Min\t' + str(pupil_edist_min) + "\n" + 'Max\t' + str(pupil_edist_max) + "\n" + 'Mean\t' + str(pupil_mean_error) + "\n" + 'Std\t' + str(pupil_std) + '\n' + 'Median\t' + str(pupil_median))
+    f.close()
+
+
+    return pupil_calculated_left, pupil_calculated_right
 
 
 def distance_calc(target_coords):
