@@ -23,9 +23,9 @@ corrected_coords_x = []
 corrected_coords_y = []
 # Mat_centers = np.zeros((5, 3), np.float32)      # Zeilen, Spalten
 
-pixelpitch_monitor = 0.0576510902161  # cm/px
-pixelpitch_sensor = 0.000142992861559
-distance_eye_monitor = 200.96330687589918072
+pixelpitch_monitor = 0.058  # cm/px
+pixelpitch_sensor = 0.00015875
+distance_eye_monitor = 200.0
 
 # Maya Kamera data
 focal_lenght = 3.8              # cm
@@ -45,7 +45,7 @@ calib_points = np.float32([[0, 0],     [480, 0],   [960, 0],   [1440, 0],   [192
 
 
 ## --- load eye images ---
-for root, dirs, files in os.walk(r'../data/ortho_z25_f40_s024/left'):     # create filelist of source images
+for root, dirs, files in os.walk(r'../data/maya/angle_z4_f5_45grad/left'):     # create filelist of source images   ortho_z25_f40_s024  ortho_z4_f5_s024
     for file in files:
         if file.endswith('.tif'):
             filelist.append(root+'/'+file)
@@ -83,11 +83,49 @@ pupil_coords_x = np.subtract(np.reshape(pupilcenter_imgcoords[:, 0],(25, 1)), wi
 pupil_coords_y = np.subtract(np.reshape(pupilcenter_imgcoords[:, 1],(25, 1)), height) * (-1)    # flip y-coordinates
 pupilcenter_coords = np.hstack((pupil_coords_x, pupil_coords_y))    # standard XY-Coordinate System
 
-pupil_centered = np.subtract(pupilcenter_coords[:,:], ((width / 2)+0.5, (height / 2)+0.5))  #pupil_coords = np.subtract(pupilcenter_matrix[:,:], center_coordinate)
+pupil_centered = np.subtract(pupilcenter_coords[:,:], ((width / 2) + 0.5, (height / 2) + 0.5))  #pupil_coords = np.subtract(pupilcenter_matrix[:,:], center_coordinate)
 
 ## -- plot --
-# pupil_coords_x = np.ravel(pupil_centered[:, 0]).reshape(25, 1)
-# pupil_coords_y = np.ravel(pupil_centered[:, 1]).reshape(25, 1)
+pupil_coords_x = np.ravel(pupil_centered[:, 0]).reshape(25, 1)
+pupil_coords_y = np.ravel(pupil_centered[:, 1]).reshape(25, 1)
+
+plt.figure(num=None, figsize=(16, 9), dpi=80, facecolor='w', edgecolor='k')
+plt.plot(pupil_coords_x, pupil_coords_y, 'ko')
+# plt.axis([-5, 5, -5, 5])
+plt.xlabel('x-Richtung')
+plt.ylabel('y-Richtung')
+
+for i in range(1,26):
+    plt.annotate(i, xy=(pupil_coords_x[i - 1], pupil_coords_y[i - 1]), color='r')
+
+plt.show()
+
+# calculate target coordinates
+[sensor_coords_left, sensor_coords_right] = evaluation.calibpoint_evaluation(calib_points, pupil_centered)
+
+## --- radial distortion correction ---
+
+# alpha_corner = np.arctan(np.sqrt(np.square(960) + np.square(540)) / 3469.1451497)  #angle between monitor corner, monitor center and eye
+
+norm_factor = 960 / np.absolute(pupil_centered[0,0])
+
+for coord in pupil_centered:
+
+    alpha_current = np.arctan(np.sqrt((coord[0] * norm_factor) ** 2 + (coord[1] * norm_factor) ** 2) / (distance_eye_monitor / pixelpitch_monitor))
+    if alpha_current == 0:      # avoid division by 0
+        factor = 0
+    else:
+        factor = np.tan(alpha_current) / np.sin(alpha_current)
+
+    corrected_coords.append(coord * factor)
+
+corrected_coords_matrix = np.ravel(corrected_coords).reshape(25, 2)
+
+centered_centerlist = np.add(corrected_coords_matrix[:,:], ((width / 2), (height / 2)))
+
+## -- plot --
+# pupil_coords_x = np.ravel(centered_centerlist[:, 0]).reshape(25, 1)
+# pupil_coords_y = np.ravel(centered_centerlist[:, 1]).reshape(25, 1)
 #
 # plt.figure(num=None, figsize=(16, 9), dpi=80, facecolor='w', edgecolor='k')
 # plt.plot(pupil_coords_x, pupil_coords_y, 'ko')
@@ -99,29 +137,6 @@ pupil_centered = np.subtract(pupilcenter_coords[:,:], ((width / 2)+0.5, (height 
 #     plt.annotate(i, xy=(pupil_coords_x[i - 1], pupil_coords_y[i - 1]), color='r')
 #
 # plt.show()
-
-# calculate target coordinates
-[sensor_coords_left, sensor_coords_right] = evaluation.calibpoint_evaluation(calib_points, pupil_centered)
-
-## --- radial distortion correction ---
-
-# alpha_corner = np.arctan(np.sqrt(np.square(960) + np.square(540)) / 3469.1451497)  #angle between monitor corner, monitor center and eye
-
-norm_factor = 960 / np.absolute(sensor_coords_left[0,0])
-
-for coord in pupil_centered:
-
-    alpha_current = np.arctan(np.sqrt((coord[0] * norm_factor) ** 2 + (coord[1] * norm_factor) ** 2) / (distance_eye_monitor / pixelpitch_monitor))
-    if alpha_current == 0:      # avoid division by 0
-        factor = 0
-    else:
-        factor = np.tan(alpha_current) / np.sin(alpha_current)
-
-    corrected_coords.append(np.ravel(coord * factor))
-
-corrected_coords_matrix = np.matrix(corrected_coords)
-centered_centerlist = np.add(corrected_coords_matrix[:,:], (width / 2,height / 2))
-
 
 src_Points = np.float32(centered_centerlist)
 
@@ -142,7 +157,7 @@ dist = np.sqrt(np.square(error[:, 0]) + np.square(error[:, 1]))     # euclidian 
 ## calculate distance
 # distance = evaluation.distance_calc(dst_Array)
 
-print 'distance', dist, '\n Max:', np.max(dist)
+# print 'distance: \n', dist, '\n Max:', np.max(dist)
 
 cv2.waitKey(0)
 cv2.destroyAllWindows()
