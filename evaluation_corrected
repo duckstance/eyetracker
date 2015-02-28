@@ -25,10 +25,18 @@ def calibpoint_evaluation(calib_points, pupil_measured):
     alpha = (np.pi / 180) * 0   # camera angle
     beta = (np.pi / 180) * 180
     korr = 0#0.02687
-    camera_world_ortho = [[0],[0],[4]]
-    z_K = 4.0
+    # camera_world_ortho = [[0],[0],[4.0]]
+    camera_world_ortho = np.float64([[0],[0],[4.0]])
     camera_world_z25 = [[0],[-16.97],[17.97]]
     camera_world_z4 = [[0],[-2.125-korr],[3.121+korr]]
+    x_K = camera_world_ortho[0]
+    y_K = camera_world_ortho[1]
+    z_K = camera_world_ortho[2]
+    camera_target = np.float64([[0],[0],[1.0]])
+    x_KT = camera_target[0]
+    y_KT = camera_target[1]
+    z_KT = camera_target[2]
+
     sensor_width = 0.54864 #0.549092588388cm   # 0,21617771023622047244094488188976"
     sensor_width_px = 3840
     sensor_height = 0.30988 #0.308864580969  # 0,1215999622047244094488188976378"
@@ -66,23 +74,40 @@ def calibpoint_evaluation(calib_points, pupil_measured):
 
         aux0 = x_P_left * (b + x_B) + y_B * y_P_left + z_B * z_P_left
 
-        l1 = (r_P*(x_P_left*b + x_P_left*x_B + y_P_left*y_B + z_P_left*z_B)*np.sqrt(x_P_left**2*b**2 + 2*x_P_left**2*b*x_B + x_P_left**2*x_B**2 + x_P_left**2*z_B**2 + 2*x_P_left*y_P_left*b*y_B + 2*x_P_left*y_P_left*x_B*y_B + y_P_left**2*y_B**2 + y_P_left**2*z_B**2))/ \
-             (z_K*x_P_left**2*b**2 + 2*z_K*x_P_left**2*b*x_B + z_K*x_P_left**2*x_B**2 + z_K*x_P_left**2*z_B**2 + 2*z_K*x_P_left*y_P_left*b*y_B + 2*z_K*x_P_left*y_P_left*x_B*y_B + z_K*y_P_left**2*y_B**2 + z_K*y_P_left**2*z_B**2)
+        l1 = (r_P*(x_P_left*b + x_P_left*x_B + y_P_left*y_B + z_P_left*z_B)*np.sqrt(x_P_left**2*b**2 + 2*x_P_left**2*b*x_B + x_P_left**2*x_B**2 + \
+            x_P_left**2*z_B**2 + 2*x_P_left*y_P_left*b*y_B + 2*x_P_left*y_P_left*x_B*y_B + y_P_left**2*y_B**2 + y_P_left**2*z_B**2))/ \
+            (z_K*x_P_left**2*b**2 + 2*z_K*x_P_left**2*b*x_B + z_K*x_P_left**2*x_B**2 + z_K*x_P_left**2*z_B**2 + 2*z_K*x_P_left*y_P_left*b*y_B + \
+            2*z_K*x_P_left*y_P_left*x_B*y_B + z_K*y_P_left**2*y_B**2 + z_K*y_P_left**2*z_B**2)
 
         l2 = - l1
 
-        g_x_1 = x_P_left + l1 * (-z_B * z_K * x_P_left / aux0)
-        g_y_1 = y_P_left + l1 * (-z_B * z_K * y_P_left / aux0)
-        g_z_1 = z_P_left + l1 * (z_K - (z_B * z_K * z_P_left / aux0))
+        x_I1 = x_P_left + l1 * (-z_B * z_K * x_P_left / aux0)
+        y_I1 = y_P_left + l1 * (-z_B * z_K * y_P_left / aux0)
+        z_I1 = z_P_left + l1 * (z_K - (z_B * z_K * z_P_left / aux0))
 
-        g_x_2 = x_P_left + l2 * (-z_B * z_K * x_P_left / aux0)
-        g_y_2 = y_P_left + l2 * (-z_B * z_K * y_P_left / aux0)
-        g_z_2 = z_P_left + l2 * (z_K - (z_B * z_K * z_P_left / aux0))
-        print g_x_2, g_y_2, g_z_2
+        x_I2 = x_P_left + l2 * (-z_B * z_K * x_P_left / aux0)
+        y_I2 = y_P_left + l2 * (-z_B * z_K * y_P_left / aux0)
+        z_I2 = z_P_left + l2 * (z_K - (z_B * z_K * z_P_left / aux0))
+
+
+        # t = (x_I1*(x_K - x_KT) + y_I1*(y_K - y_KT) + z_I1*(z_K - z_KT) + (x_I1 - x_K)*(x_K - x_KT) + (y_I1 - y_K)*(y_K - y_KT) + \
+        #    (z_I1 - z_K)*(z_K - z_KT)) / ((x_I2 - x_K)*(x_K - x_KT) + (y_I2 - y_K)*(y_K - y_KT) + (z_I2 - z_K)*(z_K - z_KT))
+        t =((x_I1 - x_K)*(x_K - x_KT) + (y_I1 - y_K)*(y_K - y_KT) + (z_I1 - z_K)*(z_K - z_KT))/((x_I2 - x_K)*(x_K - x_KT) + (y_I2 - y_K)*(y_K - y_KT) + (z_I2 - z_K)*(z_K - z_KT))
+
+        x_E = t * (x_I2 - x_K) + x_K
+        y_E = t * (y_I2 - y_K) + y_K
+        z_E = t * (z_I2 - z_K) + z_K
+
+
+        x_M = 0.5 * (x_I1 + x_E)
+        y_M = 0.5 * (y_I1 + y_E)
+        z_M = 0.5 * (z_I1 + z_E)
+
+        pupil_world_corrected = np.float64([x_M,y_M,z_M])
         Rx = np.float64([[1,0,0],[0,np.cos(alpha),-np.sin(alpha)],[0,np.sin(alpha),np.cos(alpha)]])
         Ry = np.float64([[np.cos(beta),0,np.sin(beta)],[0,1,0],[-np.sin(beta),0,np.cos(beta)]])
         t_s = camera_world_ortho
-        translated = pupil_world - t_s
+        translated = pupil_world_corrected - t_s
 
         pupil_camera = np.dot(Rx,np.dot(Ry,translated))
 
