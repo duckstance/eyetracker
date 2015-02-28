@@ -22,6 +22,12 @@ def calibpoint_evaluation(calib_points, pupil_measured):
 
     # Maya Kamera data / all in cm
     focal_length = 0.5 #3.9938  #z4: 0.4938
+    alpha = (np.pi / 180) * 0   # camera angle
+    beta = (np.pi / 180) * 180
+    korr = 0#0.02687
+    camera_world_ortho = [[0],[0],[4]]
+    camera_world_z25 = [[0],[-16.97],[17.97]]
+    camera_world_z4 = [[0],[-2.125-korr],[3.121+korr]]
     sensor_width = 0.54864 #0.549092588388cm   # 0,21617771023622047244094488188976"
     sensor_width_px = 3840
     sensor_height = 0.30988 #0.308864580969  # 0,1215999622047244094488188976378"
@@ -35,9 +41,9 @@ def calibpoint_evaluation(calib_points, pupil_measured):
     # pupill_radius = 0.232
     eye_offset = 3.2
     # distance_pupill_camera =
-    distance_eye_camera = 4.038 #.038 #25 #4.03805
+    distance_eye_camera = 4.0  #.038 #25 #4.03805
     # distance_pupill_monitor =
-    distance_eye_pupill = 1 #z25: 0.99566 #z4: 0.9851
+    distance_eye_pupill = 1.0  #z25: 0.99566 #z4: 0.9851
     distance_eye_monitor = 200.0
 
     for point in calib_points:
@@ -54,10 +60,28 @@ def calibpoint_evaluation(calib_points, pupil_measured):
         k_left = r / np.sqrt((x_B + b) ** 2 + y_B ** 2 + z_B ** 2)
         x_P_left = k_left * (x_B + b)
         y_P_left = k_left * y_B
-        z_P_left = distance_eye_camera - (k_left * z_B)
+        z_P_left = k_left * z_B
 
-        x_S_left = x_P_left * focal_length / (z_P_left * pixelpitch_sensor)
-        y_S_left = y_P_left * focal_length / (z_P_left * pixelpitch_sensor)
+        pupil_world = np.float64([[x_P_left],[y_P_left],[z_P_left]])
+
+        Rx = np.float64([[1,0,0],[0,np.cos(alpha),-np.sin(alpha)],[0,np.sin(alpha),np.cos(alpha)]])
+        Ry = np.float64([[np.cos(beta),0,np.sin(beta)],[0,1,0],[-np.sin(beta),0,np.cos(beta)]])
+        t_s = camera_world_ortho
+        translated = pupil_world - t_s
+
+        pupil_camera = np.dot(Rx,np.dot(Ry,translated))
+
+        # test_world = np.float64([[1],[1],[1]])
+        # t_test = np.float64([[0],[0],[3]])
+        # test_camera = np.dot(Rx,test_world) - t_test
+        # temp = np.dot(Rx,test_world)
+
+        camera_x = pupil_camera[0,0]
+        camera_y = pupil_camera[1,0]
+        camera_z = pupil_camera[2,0]
+
+        x_S_left = camera_x * focal_length / (camera_z * pixelpitch_sensor)
+        y_S_left = camera_y * focal_length / (camera_z * pixelpitch_sensor)
 
         coords_left = (x_S_left, y_S_left)
         sensor_coords_list_left.append(coords_left)
@@ -76,6 +100,8 @@ def calibpoint_evaluation(calib_points, pupil_measured):
 
     pupil_calculated_left = np.ravel(sensor_coords_list_left).reshape(25, 2)
     pupil_calculated_right = np.ravel(sensor_coords_list_right).reshape(25, 2)
+    pupil_calculated_x = np.ravel(pupil_calculated_left[:, 0]).reshape(25, 1)
+    pupil_calculated_y = np.ravel(pupil_calculated_left[:, 1]).reshape(25, 1)
 
     pupil_error = np.subtract(pupil_measured, pupil_calculated_left)   # choose left or right eye coords
     # print pupil_measured
@@ -97,19 +123,27 @@ def calibpoint_evaluation(calib_points, pupil_measured):
 
     ## plot
 
+    plot_x = pupil_error_x
+    plot_y = pupil_error_y
+    plot1_x = np.ravel(pupil_calculated_left[:, 0]).reshape(25, 1)
+    plot1_y = np.ravel(pupil_calculated_left[:, 1]).reshape(25, 1)
+    plot2_x = np.ravel(pupil_measured[:, 0]).reshape(25, 1)
+    plot2_y = np.ravel(pupil_measured[:, 1]).reshape(25, 1)
     plt.figure(num=None,  dpi=140, facecolor='w', edgecolor='k') #figsize=(7, 7),
     plt.grid(color='0.5')
     plt.axhline(0, color='k')
     plt.axvline(0, color='k')
 
-    plt.plot(pupil_error_x,pupil_error_y, 'kx')
+    plt.plot(plot_x,plot_y, 'kx')
+    # plt.plot(plot1_x,plot1_y, 'bx')
+    # plt.plot(plot2_x,plot2_y, 'rx')
     # plt.axis([-0.1, 0.1, -0.1, 0.1])
 
     plt.xlabel('$\Delta x$ (Pixel)')
     plt.ylabel('$\Delta y$ (Pixel)')
 
     for i in range(1,26):
-        plt.annotate(i, xy=(pupil_error_x[i - 1], pupil_error_y[i - 1]), xytext = (-0.2, 0.2), textcoords = 'offset points', ha = 'right', va = 'bottom', color='0.4')
+        plt.annotate(i, xy=(plot_x[i - 1], plot_y[i - 1]), xytext = (-0.2, 0.2), textcoords = 'offset points', ha = 'right', va = 'bottom', color='0.4')
     # plt.savefig('foo.pdf', figsize=(7, 7), bbox_inches='tight')
     plt.show()
 
