@@ -1,0 +1,195 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+import numpy as np
+import cv2
+import cv2.cv as cv
+import time
+import matplotlib.pyplot as plt
+import cPickle as pickle
+
+import rough_estimation
+
+
+def calibpoint_evaluation(calib_points, pupil_measured):
+
+    sensor_coords_list_left = []
+    sensor_coords_list_right = []
+    # 50 inch Full HD Monitor / all in cm
+    monitor_height = 62.2631774333
+    monitor_width = 110.690093215
+    monitor_diagonal = 127
+    pixelpitch_monitor = 0.058  # 0.0576510902161  # cm/px
+
+    # Maya Kamera data / all in cm
+    focal_length = 0.5 #3.9938  #z4: 0.4938
+    alpha = (np.pi / 180) * 0   # camera angle
+    beta = (np.pi / 180) * 180
+    korr = 0#0.02687
+    camera_world_ortho = [[0],[0],[4]]
+    z_K = 4.0
+    camera_world_z25 = [[0],[-16.97],[17.97]]
+    camera_world_z4 = [[0],[-2.125-korr],[3.121+korr]]
+    sensor_width = 0.54864 #0.549092588388cm   # 0,21617771023622047244094488188976"
+    sensor_width_px = 3840
+    sensor_height = 0.30988 #0.308864580969  # 0,1215999622047244094488188976378"
+    sensor_height_px = 2160
+    sensor_diagonal = 0.63
+    pixelpitch_sensor = 0.00015875 #0.000142992861559 # 0.00015875 0001607
+
+    # eye data
+    eye_radius = 1.165
+    iris_radius = 0.655
+    # pupill_radius = 0.232
+    eye_offset = 3.2
+    # distance_pupill_camera =
+    distance_eye_camera = 4.0  #.038 #25 #4.03805
+    # distance_pupill_monitor =
+    distance_eye_pupill = 1.0  #z25: 0.99566 #z4: 0.9851
+    distance_eye_monitor = 200.0
+
+    for point in calib_points:
+
+        x_B = (point[0] - 960) * pixelpitch_monitor
+        y_B = (point[1] - 540) * pixelpitch_monitor * (-1)      # *-1 to invert the values to get them in a standard coordinate system
+        z_B = distance_eye_monitor
+
+        b = eye_offset
+        r = distance_eye_pupill
+        r_P = 0.2
+        ## --- left eye ---
+        k_left = r / np.sqrt((x_B + b) ** 2 + y_B ** 2 + z_B ** 2)
+        x_P_left = k_left * (x_B + b)
+        y_P_left = k_left * y_B
+        z_P_left = k_left * z_B
+
+        pupil_world = np.float64([[x_P_left],[y_P_left],[z_P_left]])
+
+        aux0 = x_P_left * (b + x_B) + y_B * y_P_left + z_B * z_P_left
+
+        l1 = (r_P*(x_P_left*b + x_P_left*x_B + y_P_left*y_B + z_P_left*z_B)*np.sqrt(x_P_left**2*b**2 + 2*x_P_left**2*b*x_B + x_P_left**2*x_B**2 + x_P_left**2*z_B**2 + 2*x_P_left*y_P_left*b*y_B + 2*x_P_left*y_P_left*x_B*y_B + y_P_left**2*y_B**2 + y_P_left**2*z_B**2))/ \
+             (z_K*x_P_left**2*b**2 + 2*z_K*x_P_left**2*b*x_B + z_K*x_P_left**2*x_B**2 + z_K*x_P_left**2*z_B**2 + 2*z_K*x_P_left*y_P_left*b*y_B + 2*z_K*x_P_left*y_P_left*x_B*y_B + z_K*y_P_left**2*y_B**2 + z_K*y_P_left**2*z_B**2)
+
+        l2 = - l1
+
+        g_x_1 = x_P_left + l1 * (-z_B * z_K * x_P_left / aux0)
+        g_y_1 = y_P_left + l1 * (-z_B * z_K * y_P_left / aux0)
+        g_z_1 = z_P_left + l1 * (z_K - (z_B * z_K * z_P_left / aux0))
+
+        g_x_2 = x_P_left + l2 * (-z_B * z_K * x_P_left / aux0)
+        g_y_2 = y_P_left + l2 * (-z_B * z_K * y_P_left / aux0)
+        g_z_2 = z_P_left + l2 * (z_K - (z_B * z_K * z_P_left / aux0))
+        print g_x_2, g_y_2, g_z_2
+        Rx = np.float64([[1,0,0],[0,np.cos(alpha),-np.sin(alpha)],[0,np.sin(alpha),np.cos(alpha)]])
+        Ry = np.float64([[np.cos(beta),0,np.sin(beta)],[0,1,0],[-np.sin(beta),0,np.cos(beta)]])
+        t_s = camera_world_ortho
+        translated = pupil_world - t_s
+
+        pupil_camera = np.dot(Rx,np.dot(Ry,translated))
+
+        # test_world = np.float64([[1],[1],[1]])
+        # t_test = np.float64([[0],[0],[3]])
+        # test_camera = np.dot(Rx,test_world) - t_test
+        # temp = np.dot(Rx,test_world)
+
+        camera_x = pupil_camera[0,0]
+        camera_y = pupil_camera[1,0]
+        camera_z = pupil_camera[2,0]
+
+        x_S_left = camera_x * focal_length / (camera_z * pixelpitch_sensor)
+        y_S_left = camera_y * focal_length / (camera_z * pixelpitch_sensor)
+
+        coords_left = (x_S_left, y_S_left)
+        sensor_coords_list_left.append(coords_left)
+
+        ## --- right eye ---
+        k_right = r / np.sqrt((x_B - b) ** 2 + y_B ** 2 + z_B ** 2)
+        x1_right = k_right * (x_B - b)
+        y_P_right = k_right * y_B
+        z_P_right = distance_eye_camera - (k_right * z_B)
+
+        x_S_right = x1_right * focal_length / (z_P_right * pixelpitch_sensor)
+        y_S_right = y_P_right * focal_length / (z_P_right * pixelpitch_sensor)
+
+        coords_right = (x_S_right, y_S_right)
+        sensor_coords_list_right.append(coords_right)
+
+    pupil_calculated_left = np.ravel(sensor_coords_list_left).reshape(25, 2)
+    pupil_calculated_right = np.ravel(sensor_coords_list_right).reshape(25, 2)
+    pupil_calculated_x = np.ravel(pupil_calculated_left[:, 0]).reshape(25, 1)
+    pupil_calculated_y = np.ravel(pupil_calculated_left[:, 1]).reshape(25, 1)
+
+    pupil_error = np.subtract(pupil_measured, pupil_calculated_left)   # choose left or right eye coords
+    # print pupil_measured
+    pupil_error_x = np.ravel(pupil_error[:, 0]).reshape(25, 1)
+    pupil_error_y = np.ravel(pupil_error[:, 1]).reshape(25, 1)
+    pupil_edist = np.sqrt(np.square(pupil_error_x) + np.square(pupil_error_y))
+    pupil_edist_min = np.min(pupil_edist)
+    pupil_edist_max = np.max(pupil_edist)
+    pupil_mean_error = np.sum(pupil_edist) / 25
+    pupil_std = np.std(pupil_edist)
+    pupil_median = np.median(pupil_edist)
+
+    print pupil_edist
+    print 'Min Error:','\t', pupil_edist_min
+    print 'Max Error:','\t', pupil_edist_max
+    print 'Mean Error:', pupil_mean_error
+    print 'Std:','\t\t', pupil_std
+    print 'Median:','\t', pupil_median
+
+    ## plot
+
+    plot_x = pupil_error_x
+    plot_y = pupil_error_y
+    plot1_x = np.ravel(pupil_calculated_left[:, 0]).reshape(25, 1)
+    plot1_y = np.ravel(pupil_calculated_left[:, 1]).reshape(25, 1)
+    plot2_x = np.ravel(pupil_measured[:, 0]).reshape(25, 1)
+    plot2_y = np.ravel(pupil_measured[:, 1]).reshape(25, 1)
+    plt.figure(num=None,  dpi=140, facecolor='w', edgecolor='k') #figsize=(7, 7),
+    plt.grid(color='0.5')
+    plt.axhline(0, color='k')
+    plt.axvline(0, color='k')
+
+    plt.plot(plot_x,plot_y, 'kx')
+    # plt.plot(plot1_x,plot1_y, 'bx')
+    # plt.plot(plot2_x,plot2_y, 'rx')
+    # plt.axis([-0.1, 0.1, -0.1, 0.1])
+
+    plt.xlabel('$\Delta x$ (Pixel)')
+    plt.ylabel('$\Delta y$ (Pixel)')
+
+    for i in range(1,26):
+        plt.annotate(i, xy=(plot_x[i - 1], plot_y[i - 1]), xytext = (-0.2, 0.2), textcoords = 'offset points', ha = 'right', va = 'bottom', color='0.4')
+    # plt.savefig('foo.pdf', figsize=(7, 7), bbox_inches='tight')
+    plt.show()
+
+    # ## --- Saving the objects ---
+    # with open('../data/accuracy/ortho_z25_f40_centermass_original.pickle', 'w') as file:
+    #     pickle.dump([pupil_error, pupil_edist, pupil_edist_min, pupil_edist_max, pupil_mean_error, pupil_std, pupil_median], file)
+
+    ## --- Loading the objects ---
+    # with open('data.pickle') as file:
+    #     pupil_error, pupil_edist, pupil_edist_min, pupil_edist_max, pupil_mean_error, pupil_std, pupil_median = pickle.load(file)
+    # print loaded_edist
+
+    ## --- saving data to file ---
+    f = open("../data/accuracy/max_genauigkeit/z4.txt", "w")
+    number = 1
+    for save in pupil_edist:
+
+        f.write(str(number) + '\t' + str(save) + "\n")  # str() converts to string
+
+        number += 1
+    f.write('Min\t' + str(pupil_edist_min) + "\n" + 'Max\t' + str(pupil_edist_max) + "\n" + 'Mean\t' + str(pupil_mean_error) + "\n" + 'Std\t' + str(pupil_std) + '\n' + 'Median\t' + str(pupil_median))
+    f.close()
+
+
+    return pupil_calculated_left, pupil_calculated_right
+
+
+def distance_calc(target_coords):
+
+    temp_target = target_coords[0,0,0]      # target x-coordinate
+    # a = temp_target[0]
+
+    # left_vector =
+    # right_vector
