@@ -26,9 +26,9 @@ def calibpoint_evaluation(calib_points, pupil_measured):
     beta = (np.pi / 180) * 180
     korr = 0#0.02687
     # camera_world_ortho = [[0],[0],[4.0]]
-    camera_world_ortho = np.float64([[0],[0],[4.0]])
+    camera_world_ortho = np.float64([[0],[0],[4]])
     camera_world_z25 = [[0],[-16.97],[17.97]]
-    camera_world_z4 = [[0],[-2.125-korr],[3.121+korr]]
+    camera_world_z4 = [[0],[-2.121],[3.121]]
     x_K = camera_world_ortho[0]
     y_K = camera_world_ortho[1]
     z_K = camera_world_ortho[2]
