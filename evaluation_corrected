@@ -22,17 +22,17 @@ def calibpoint_evaluation(calib_points, pupil_measured):
 
     # Maya Kamera data / all in cm
     focal_length = 0.5 #3.9938  #z4: 0.4938
-    alpha = (np.pi / 180) * 0   # camera angle
+    alpha = (np.pi / 180) * 45   # camera angle
     beta = (np.pi / 180) * 180
     korr = 0#0.02687
     # camera_world_ortho = [[0],[0],[4.0]]
-    camera_world_ortho = np.float64([[0],[0],[4]])
+    camera_world_ortho = np.float64([[0],[-2.828],[2.828]])
     camera_world_z25 = [[0],[-16.97],[17.97]]
     camera_world_z4 = [[0],[-2.121],[3.121]]
     x_K = camera_world_ortho[0]
     y_K = camera_world_ortho[1]
     z_K = camera_world_ortho[2]
-    camera_target = np.float64([[0],[0],[1.0]])
+    camera_target = np.float64([[0],[0],[0]])
     x_KT = camera_target[0]
     y_KT = camera_target[1]
     z_KT = camera_target[2]
@@ -72,22 +72,21 @@ def calibpoint_evaluation(calib_points, pupil_measured):
 
         pupil_world = np.float64([[x_P_left],[y_P_left],[z_P_left]])
 
-        aux0 = x_P_left * (b + x_B) + y_B * y_P_left + z_B * z_P_left
+        aux0 = x_P_left ** 2 + y_P_left ** 2 + z_P_left ** 2
+        aux1 = x_K ** 2 * y_P_left ** 2 + x_K ** 2 * z_P_left ** 2 - 2 * x_K * x_P_left * y_K * y_P_left - 2 * x_K * x_P_left * z_K * z_P_left + \
+               x_P_left ** 2 * y_K ** 2 + x_P_left ** 2 * z_K ** 2 + y_K ** 2 * z_P_left ** 2 - 2 * y_K * y_P_left * z_K * z_P_left + y_P_left ** 2 * z_K ** 2
 
-        l1 = (r_P*(x_P_left*b + x_P_left*x_B + y_P_left*y_B + z_P_left*z_B)*np.sqrt(x_P_left**2*b**2 + 2*x_P_left**2*b*x_B + x_P_left**2*x_B**2 + \
-            x_P_left**2*z_B**2 + 2*x_P_left*y_P_left*b*y_B + 2*x_P_left*y_P_left*x_B*y_B + y_P_left**2*y_B**2 + y_P_left**2*z_B**2))/ \
-            (z_K*x_P_left**2*b**2 + 2*z_K*x_P_left**2*b*x_B + z_K*x_P_left**2*x_B**2 + z_K*x_P_left**2*z_B**2 + 2*z_K*x_P_left*y_P_left*b*y_B + \
-            2*z_K*x_P_left*y_P_left*x_B*y_B + z_K*y_P_left**2*y_B**2 + z_K*y_P_left**2*z_B**2)
+        l1 = r_P * aux0 * np.sqrt(aux1 / aux0) / aux1
 
         l2 = - l1
 
-        x_I1 = x_P_left + l1 * (-z_B * z_K * x_P_left / aux0)
-        y_I1 = y_P_left + l1 * (-z_B * z_K * y_P_left / aux0)
-        z_I1 = z_P_left + l1 * (z_K - (z_B * z_K * z_P_left / aux0))
+        x_I1 = x_P_left + l1 * (x_K - x_P_left * (x_P_left * x_K + y_P_left * y_K + z_P_left * z_K) / aux0)
+        y_I1 = y_P_left + l1 * (y_K - y_P_left * (y_P_left * x_K + y_P_left * y_K + z_P_left * z_K) / aux0)
+        z_I1 = z_P_left + l1 * (z_K - z_P_left * (z_P_left * x_K + y_P_left * y_K + z_P_left * z_K) / aux0)
 
-        x_I2 = x_P_left + l2 * (-z_B * z_K * x_P_left / aux0)
-        y_I2 = y_P_left + l2 * (-z_B * z_K * y_P_left / aux0)
-        z_I2 = z_P_left + l2 * (z_K - (z_B * z_K * z_P_left / aux0))
+        x_I2 = x_P_left + l2 * (x_K - x_P_left * (x_P_left * x_K + y_P_left * y_K + z_P_left * z_K) / aux0)
+        y_I2 = y_P_left + l2 * (y_K - y_P_left * (y_P_left * x_K + y_P_left * y_K + z_P_left * z_K) / aux0)
+        z_I2 = z_P_left + l2 * (z_K - z_P_left * (z_P_left * x_K + y_P_left * y_K + z_P_left * z_K) / aux0)
 
 
         # t = (x_I1*(x_K - x_KT) + y_I1*(y_K - y_KT) + z_I1*(z_K - z_KT) + (x_I1 - x_K)*(x_K - x_KT) + (y_I1 - y_K)*(y_K - y_KT) + \
@@ -177,7 +176,7 @@ def calibpoint_evaluation(calib_points, pupil_measured):
     plt.plot(plot_x,plot_y, 'kx')
     # plt.plot(plot1_x,plot1_y, 'bx')
     # plt.plot(plot2_x,plot2_y, 'rx')
-    # plt.axis([-0.1, 0.1, -0.1, 0.1])
+    plt.axis([-0.05, 0.05, -0.05, 0.05])
 
     plt.xlabel('$\Delta x$ (Pixel)')
     plt.ylabel('$\Delta y$ (Pixel)')
