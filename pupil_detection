@@ -12,23 +12,26 @@ import rough_estimation
 
 
 def darkest_pixel(img):
-    scalefactor = np.float(4)
+    scalefactor = 2.0
+
+    img_resized = cv2.resize(img, (0, 0), fx=(1 / scalefactor), fy=(1 / scalefactor))
     # img_blur = cv2.GaussianBlur(img, (501,501), 50)
-    img_blur = cv2.blur(img, (400,400))
-    img_resized = cv2.resize(img_blur, (0, 0), fx=(1 / scalefactor), fy=(1 / scalefactor))
-    # cv2.imshow('blurred',img_resized)
+    img_blur = cv2.blur(img_resized, (int(400/scalefactor),int(400/scalefactor)))
+
+    cv2.imshow('blurred',img_blur)
 
     #find position of darkest area
     index_y, index_x = np.where(img_blur == img_blur.min())
 
     #calculate center of multiple minimums
-    center_coords = ([(np.amin(index_x) + np.amax(index_x)) / 2, (np.amin(index_y) + np.amax(index_y)) / 2])
 
+    cx = (np.amin(index_x) + np.amax(index_x)) / 2
+    cy = (np.amin(index_y) + np.amax(index_y)) / 2
     # equ = cv2.equalizeHist(img_blur)
     # ret, thresh2 = cv2.threshold(img_blur, 30, 255, cv2.THRESH_BINARY_INV)
     # cv2.imshow('tresh',thresh2)
 
-    return center_coords
+    return (cx + 0.5) * scalefactor, (cy + 0.5) * scalefactor
 
 
 def edge_ellipse_fit(img):
@@ -54,8 +57,10 @@ def center_of_mass(img):
     # cimg = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
     # img_blur = cv2.blur(img, (50, 50))      #
     # img_gaussian = cv2.GaussianBlur(img, (11, 11), 0)
+    scalefactor = 2.0
+    img_resized = cv2.resize(img, (0, 0), fx=(1 / scalefactor), fy=(1 / scalefactor), interpolation = cv2.INTER_LINEAR)
 
-    ret, thresh = cv2.threshold(img, 30, 255, cv2.THRESH_BINARY_INV)
+    ret, thresh = cv2.threshold(img_resized, 30, 255, cv2.THRESH_BINARY_INV)
     # cv2.imshow('blurred', thresh)
 
     contours = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
@@ -77,7 +82,7 @@ def center_of_mass(img):
     # cv2.ellipse(cimg, ellipse, (255, 0, 0), 2)
 
 
-    return cx, cy
+    return (cx + 0.5) * scalefactor, (cy + 0.5) * scalefactor
 
 
 def distance_transform(img):
@@ -93,7 +98,8 @@ def distance_transform(img):
     dist_transform = cv2.distanceTransform(thresh, cv2.cv.CV_DIST_L2, 5)
     equalized = cv2.normalize(dist_transform, alpha=0., beta=1., norm_type=cv2.NORM_MINMAX)
 
-    # cv2.imshow('Dist Transform', equalized)
+    # img_rez = cv2.resize(equalized, (0, 0), fx=(1 / 4.0), fy=(1 / 4.0))
+    # cv2.imshow('Dist Transform', img_rez)
 
     index_y, index_x = np.where(equalized == equalized.max())
 
@@ -127,7 +133,7 @@ def hough_circle(img):
 
 def hough_ellipse(img):
 
-    from skimage import data, color
+    from skimage import color
     from skimage.filter import canny
     from skimage.transform import hough_ellipse
     from skimage.transform import resize
@@ -135,7 +141,7 @@ def hough_ellipse(img):
     from skimage import io
     from skimage.viewer import ImageViewer
 
-    scalefactor = np.float32(2)     # 2:            Mean Error:  1.5270172275 Standardabweichung:  0.373837296196
+    scalefactor = np.float(4)     # 2:            Mean Error:  1.5270172275 Standardabweichung:  0.373837296196
 
     cimg = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
     cimg_resized = cv2.resize(cimg, (0, 0), fx=(1/scalefactor), fy=(1/scalefactor))
@@ -150,16 +156,16 @@ def hough_ellipse(img):
     # The accuracy corresponds to the bin size of a major axis.
     # The value is chosen in order to get a single high accumulator.
     # The threshold eliminates low accumulators
-    result = hough_ellipse(edges, accuracy=4, threshold=4, min_size=220 / scalefactor, max_size=260 / scalefactor)   # result = hough_ellipse(edges, accuracy=20, threshold=250, min_size=100, max_size=120)
+    result = hough_ellipse(edges, accuracy=4, threshold=20, min_size=200 / scalefactor, max_size=240 / scalefactor)   # result = hough_ellipse(edges, accuracy=20, threshold=250, min_size=100, max_size=120)
 
     result.sort(order='accumulator')
 
     # Estimated parameters for the ellipse
     best = result[-1]
-    yc = best[1] * scalefactor
-    xc = best[2] * scalefactor
+    cx = best[2] * scalefactor
+    cy = best[1] * scalefactor
 
-    return xc, yc
+    return cx, cy
 
 
 def starburst(img_src):
@@ -167,10 +173,10 @@ def starburst(img_src):
     # declarations and initialisations
 
     # factor for downscaling image
-    scalefactor = np.float(1)
+    scalefactor = 1.0
 
     # length of rays
-    raylength = int(400 / scalefactor)
+    raylength = int(600 / scalefactor)
 
     # threshold for gradient detection trigger
     gradient_thresh = 1
