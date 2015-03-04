@@ -133,22 +133,70 @@ def hough_circle(img):
 
 def hough_ellipse(img):
 
-    from skimage import color
+    from skimage import data, color
     from skimage.filter import canny
     from skimage.transform import hough_ellipse
     from skimage.transform import resize
     from skimage.draw import ellipse_perimeter
     from skimage import io
     from skimage.viewer import ImageViewer
+    import cv2
 
-    scalefactor = np.float(4)     # 2:            Mean Error:  1.5270172275 Standardabweichung:  0.373837296196
+    import numpy as np
 
-    cimg = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
-    cimg_resized = cv2.resize(cimg, (0, 0), fx=(1/scalefactor), fy=(1/scalefactor))
+    scalefactor = np.float(4)
 
-    cimg_gray = color.rgb2gray(cimg_resized)
+
+    start = time.clock()
+
+    img_resized = cv2.resize(img, (0, 0), fx=(1 / scalefactor), fy=(1 / scalefactor), interpolation = cv2.INTER_LINEAR)
+
+    height, width = img_resized.shape
+
+    ret, thresh = cv2.threshold(img_resized, 30, 255, cv2.THRESH_BINARY_INV)
+    # cv2.imshow('blurred', thresh)
+
+    contours = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    cnt = contours[0]
+
+    # cv2.drawContours(cimg, cnt, -1, (0, 255, 0), 1)
+
+    # cv2.imshow('tresh', cimg)
+
+    Rect = cv2.boundingRect(cnt[0])
+    corner_lt = int(Rect[0]-0.1*Rect[2]), int(Rect[1]-0.1*Rect[3])  # create left-top ROI corner with 10% margin
+
+    # handle left-top boundary violation
+    if corner_lt[0] < 0:
+        corner_lt = 0, corner_lt[1]
+    if corner_lt[1] < 0:
+        corner_lt = corner_lt[0], 0
+
+    corner_rb = (int(corner_lt[0] + Rect[2]*1.2), int(corner_lt[1] + Rect[3]*1.2))  # create right-bottom ROI corner with 10% margin
+
+    # handle right-bottom boundary violation
+    if corner_rb[0] > width:
+        corner_rb = width, corner_rb[1]
+    if corner_rb[1] > height:
+        corner_rb = corner_rb[0], height
+
+    # cv2.rectangle(img_resized, corner_lt, corner_rb, (255, 0, 0), 2)
+
+
+    img_crop = img_resized[corner_lt[1]:corner_rb[1], corner_lt[0]:corner_rb[0]]
+    # cv2.imshow('rect', img_crop)
+    height_crop, width_crop = img_crop.shape
+    if width_crop >= height_crop:
+        larger_dim = width_crop
+        smaller_dim = height_crop
+    if width_crop < height_crop:
+        smaller_dim = width_crop
+        larger_dim = height_crop
+
+    cimg = cv2.cvtColor(img_crop, cv2.COLOR_GRAY2BGR)
+
+    cimg_gray = color.rgb2gray(cimg)
     edges = canny(cimg_gray, sigma=2.5, low_threshold=0.4, high_threshold=0.9)
-
     # viewer = ImageViewer(edges)
     # viewer.show()
 
@@ -156,16 +204,25 @@ def hough_ellipse(img):
     # The accuracy corresponds to the bin size of a major axis.
     # The value is chosen in order to get a single high accumulator.
     # The threshold eliminates low accumulators
-    result = hough_ellipse(edges, accuracy=4, threshold=20, min_size=200 / scalefactor, max_size=240 / scalefactor)   # result = hough_ellipse(edges, accuracy=20, threshold=250, min_size=100, max_size=120)
+    result = hough_ellipse(edges, accuracy=4, threshold=25, min_size=(smaller_dim*0.4), max_size=(larger_dim*0.5))   # result = hough_ellipse(edges, accuracy=20, threshold=250, min_size=100, max_size=120) min_size: Minimal major axis length. max: Maximal minor axis length.
 
     result.sort(order='accumulator')
 
     # Estimated parameters for the ellipse
     best = result[-1]
-    cx = best[2] * scalefactor
-    cy = best[1] * scalefactor
+    yc = int(best[1])
+    xc = int(best[2])
+    a = int(best[3])
+    b = int(best[4])
+    orientation = best[5]
 
-    return cx, cy
+    elapsed = (time.clock() - start)
+    print 'elapsed time:', elapsed
+
+    cx = (best[2] + corner_lt[0])
+    cy = (best[1] + corner_lt[1])
+
+    return cx * scalefactor, cy * scalefactor
 
 
 def starburst(img_src):
