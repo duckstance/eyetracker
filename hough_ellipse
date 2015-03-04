@@ -1,24 +1,42 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 import matplotlib.pyplot as plt
 
 from skimage import data, color
 from skimage.filter import canny
 from skimage.transform import hough_ellipse
+from skimage.transform import resize
 from skimage.draw import ellipse_perimeter
 from skimage import io
+from skimage.viewer import ImageViewer
+import cv2
 
-# Load picture, convert to grayscale and detect edges
-image_rgb = data.coffee()[0:220, 160:420]
-img_eye = io.imread('C:/Users/Arno/Documents/Masterarbeit/Matlab/eye_test.png')
+import time
+import numpy as np
+
+scalefactor = np.float(1)
+
+img = cv2.imread('../data/maya/ortho_z4_f5_s024/left/left01.tif', 0)
+
+start = time.clock()
+# img_RGB = cv2.cvtColor(img_BGR,cv2.COLOR_BGR2RGB)
+cimg = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+# height, width, depth = img_BGR.shape
 # camera_float = util.img_as_float(camera)
 
-image_gray = color.rgb2gray(img_eye)
-edges = canny(image_gray, sigma=2.0, low_threshold=0.55, high_threshold=0.8)
+# img_eye = resize(img_RGB, (height / scalefactor, width / scalefactor), order=3, mode='constant', cval=0.0)
+cimg_resized = cv2.resize(cimg, (0, 0), fx=(1/scalefactor), fy=(1/scalefactor))
+
+cimg_gray = color.rgb2gray(cimg_resized)
+edges = canny(cimg_gray, sigma=2.5, low_threshold=0.4, high_threshold=0.9)
+# viewer = ImageViewer(edges)
+# viewer.show()
 
 # Perform a Hough Transform
 # The accuracy corresponds to the bin size of a major axis.
 # The value is chosen in order to get a single high accumulator.
 # The threshold eliminates low accumulators
-result = hough_ellipse(edges, accuracy=1, threshold=4, min_size=20, max_size=40)   # result = hough_ellipse(edges, accuracy=20, threshold=250, min_size=100, max_size=120)
+result = hough_ellipse(edges, accuracy=4, threshold=20, min_size= 200 / scalefactor, max_size= 240 / scalefactor)   # result = hough_ellipse(edges, accuracy=20, threshold=250, min_size=100, max_size=120) min_size: Minimal major axis length. max: Maximal minor axis length.
 
 result.sort(order='accumulator')
 
@@ -30,19 +48,26 @@ a = int(best[3])
 b = int(best[4])
 orientation = best[5]
 
+elapsed = (time.clock() - start)
+print 'elapsed time:', elapsed
+
 # Draw the ellipse on the original image
 cy, cx = ellipse_perimeter(yc, xc, a, b, orientation)
-img_eye[cy, cx] = (0, 0, 255)
+cimg_resized[cy, cx] = (0, 0, 255)
 # Draw the edge (white) and the resulting ellipse (red)
 edges = color.gray2rgb(edges)
 edges[cy, cx] = (250, 0, 0)
+viewer = ImageViewer(edges)
+viewer.show()
 
-fig2, (ax1, ax2) = plt.subplots(ncols=2, nrows=1, figsize=(8, 4))
 
-ax1.set_title('Original picture')
-ax1.imshow(img_eye)
-
-ax2.set_title('Edge (white) and result (red)')
-ax2.imshow(edges)
-
-plt.show()
+#
+# fig2, (ax1, ax2) = plt.subplots(ncols=2, nrows=1, figsize=(20, 10))
+#
+# ax1.set_title('Original picture')
+# ax1.imshow(cimg)
+#
+# ax2.set_title('Edge (white) and result (red)')
+# ax2.imshow(edges)
+#
+# plt.show()
