@@ -1,0 +1,90 @@
+from skimage import measure, feature, io, color, draw
+from skimage import data, color
+from skimage.filter import canny
+from skimage.draw import ellipse_perimeter
+from skimage import io
+from skimage.viewer import ImageViewer
+import cv2
+
+import time
+import numpy as np
+
+scalefactor = np.float(2)
+
+img = cv2.imread('../data/maya/angle_center_f5_45/left/left_45grad18.tif', 0)    #../data/maya/ortho_z4_f5_s024/left/left15.tif
+
+start = time.clock()
+
+img_resized = cv2.resize(img, (0, 0), fx=(1 / scalefactor), fy=(1 / scalefactor), interpolation = cv2.INTER_LINEAR)
+
+
+height, width = img_resized.shape
+
+ret, thresh = cv2.threshold(img_resized, 30, 255, cv2.THRESH_BINARY_INV)
+# cv2.imshow('blurred', thresh)
+
+contours = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+cnt = contours[0]
+
+# cv2.drawContours(cimg, cnt, -1, (0, 255, 0), 1)
+
+# cv2.imshow('tresh', cimg)
+
+Rect = cv2.boundingRect(cnt[0])
+corner_lt = int(Rect[0]-0.1*Rect[2]), int(Rect[1]-0.1*Rect[3])  # create left-top ROI corner with 10% margin
+
+# handle left-top boundary violation
+if corner_lt[0] < 0:
+    corner_lt = 0, corner_lt[1]
+if corner_lt[1] < 0:
+    corner_lt = corner_lt[0], 0
+
+corner_rb = (int(corner_lt[0] + Rect[2]*1.2), int(corner_lt[1] + Rect[3]*1.2))  # create right-bottom ROI corner with 10% margin
+
+# handle right-bottom boundary violation
+if corner_rb[0] > width:
+    corner_rb = width, corner_rb[1]
+if corner_rb[1] > height:
+    corner_rb = corner_rb[0], height
+
+# cv2.rectangle(img_resized, corner_lt, corner_rb, (255, 0, 0), 2)
+
+
+img_crop = img_resized[corner_lt[1]:corner_rb[1], corner_lt[0]:corner_rb[0]]
+cimg = cv2.cvtColor(img_crop, cv2.COLOR_GRAY2BGR)
+
+img = color.rgb2gray(img_crop)
+# img = canny(img).astype(np.uint8)
+img = cv2.Canny(img, 500, 1000)
+# img = canny(img, sigma=0.01, low_threshold=0.4, high_threshold=0.8).astype(np.uint8)
+# img[img > 0] = 255
+viewer = ImageViewer(img)
+viewer.show()
+
+coords = np.column_stack(np.nonzero(img))
+
+model, inliers = measure.ransac(coords, measure.EllipseModel, min_samples=20, residual_threshold=1, max_trials=50, stop_sample_num=20)
+
+print model.params
+
+# rr, cc = draw.ellipse(model.params[0], model.params[1], model.params[2], model.params[3])  #, shape=img.shape
+# img[rr, cc] = 128
+
+cy, cx = ellipse_perimeter(int(round(model.params[0])), int(round(model.params[1])), int(model.params[2]), int(model.params[3]), -model.params[4])
+cimg[cy, cx] = (0, 0, 255)
+cx_crop = model.params[0]
+cy_crop = model.params[1]
+c_x = (model.params[0] + corner_lt[0]) * scalefactor
+c_y = (model.params[1] + corner_lt[1]) * scalefactor
+
+
+print c_x, c_y
+
+# show elapsed time
+elapsed = (time.clock() - start)
+print 'elapsed time:', elapsed
+
+
+viewer = ImageViewer(cimg)
+viewer.show()
+
