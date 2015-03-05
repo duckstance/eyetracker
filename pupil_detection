@@ -1,12 +1,18 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import numpy as np
 import cv2
 import cv2.cv as cv
-import numpy as np
 import time
 import matplotlib.pyplot as plt
-
-
+from skimage import measure, feature, io, color, draw
+from skimage.draw import ellipse_perimeter
+from skimage import io
+from skimage.viewer import ImageViewer
+from skimage import measure
+from skimage import data, color
+from skimage.filter import canny
+from skimage.transform import hough_ellipse
 
 import rough_estimation
 
@@ -16,7 +22,7 @@ def darkest_pixel(img):
 
     img_resized = cv2.resize(img, (0, 0), fx=(1 / scalefactor), fy=(1 / scalefactor))
     # img_blur = cv2.GaussianBlur(img, (501,501), 50)
-    img_blur = cv2.blur(img_resized, (int(400/scalefactor),int(400/scalefactor)))
+    img_blur = cv2.blur(img_resized, (int(250/scalefactor),int(250/scalefactor)))   #ortho 400  angle 250
 
     cv2.imshow('blurred',img_blur)
 
@@ -25,21 +31,22 @@ def darkest_pixel(img):
 
     #calculate center of multiple minimums
 
-    cx = (np.amin(index_x) + np.amax(index_x)) / 2
-    cy = (np.amin(index_y) + np.amax(index_y)) / 2
+    cx = (np.amin(index_x) + np.amax(index_x)) / 2.0
+    cy = (np.amin(index_y) + np.amax(index_y)) / 2.0
     # equ = cv2.equalizeHist(img_blur)
     # ret, thresh2 = cv2.threshold(img_blur, 30, 255, cv2.THRESH_BINARY_INV)
     # cv2.imshow('tresh',thresh2)
 
-    return (cx + 0.5) * scalefactor, (cy + 0.5) * scalefactor
+    return (cx+0.5) * scalefactor, (cy+0.5) * scalefactor
 
 
 def edge_ellipse_fit(img):
 
-    scalefactor = np.float(4)
+    scalefactor = np.float(2)
 
+    img_resized = cv2.resize(img, (0, 0), fx=(1 / scalefactor), fy=(1 / scalefactor))
     # cimg = cv2.cvtColor(img_resized, cv2.COLOR_GRAY2BGR)
-    canny = cv2.Canny(img, 500, 1000)
+    canny = cv2.Canny(img_resized, 500, 1000)
     # img_resized = cv2.resize(canny, (0, 0), fx=(1 / scalefactor), fy=(1 / scalefactor))
     # cv2.imshow('canny', img_resized)
 
@@ -47,9 +54,66 @@ def edge_ellipse_fit(img):
     ellipse_points = np.vstack((index_x, index_y)).T
     ellipse = cv2.fitEllipse(ellipse_points)
     # cv2.ellipse(cimg, ellipse, (255, 0, 0), 1)
-    ellipse_center = ellipse[0]
 
-    return ellipse_center[0], ellipse_center[1]
+    ellipse_center = ellipse[0]
+    cx = ellipse_center[0]
+    cy = ellipse_center[1]
+
+    return (cx + 0.5) * scalefactor, (cy + 0.5) * scalefactor
+
+
+def ransac_ellipse_fit(img):
+
+    scalefactor = np.float(2)
+
+    # img = cv2.imread('../data/maya/ortho_z4_f5_s024/left/left01.tif', 0)
+
+    img_resized = cv2.resize(img, (0, 0), fx=(1 / scalefactor), fy=(1 / scalefactor), interpolation = cv2.INTER_LINEAR)
+
+    height, width = img_resized.shape
+
+    ret, thresh = cv2.threshold(img_resized, 30, 255, cv2.THRESH_BINARY_INV)
+
+    contours = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    cnt = contours[0]
+
+    Rect = cv2.boundingRect(cnt[0])
+    corner_lt = int(Rect[0]-0.1*Rect[2]), int(Rect[1]-0.1*Rect[3])  # create left-top ROI corner with 10% margin
+
+    # handle left-top boundary violation
+    if corner_lt[0] < 0:
+        corner_lt = 0, corner_lt[1]
+    if corner_lt[1] < 0:
+        corner_lt = corner_lt[0], 0
+
+    corner_rb = (int(corner_lt[0] + Rect[2]*1.2), int(corner_lt[1] + Rect[3]*1.2))  # create right-bottom ROI corner with 10% margin
+
+    # handle right-bottom boundary violation
+    if corner_rb[0] > width:
+        corner_rb = width, corner_rb[1]
+    if corner_rb[1] > height:
+        corner_rb = corner_rb[0], height
+
+    # cv2.rectangle(img_resized, corner_lt, corner_rb, (255, 0, 0), 2)
+
+    img_crop = img_resized[corner_lt[1]:corner_rb[1], corner_lt[0]:corner_rb[0]]
+
+    img = color.rgb2gray(img_crop)
+    img = canny(img).astype(np.uint8)
+    img[img > 0] = 255
+    # img = cv2.Canny(img, 500, 1000)
+
+    # viewer = ImageViewer(img)
+    # viewer.show()
+
+    coords = np.column_stack(np.nonzero(img))
+
+    model, inliers = measure.ransac(coords, measure.EllipseModel, min_samples=20, residual_threshold=1, max_trials=20)
+
+    cx = (model.params[1] + corner_lt[0])
+    cy = (model.params[0] + corner_lt[1])
+
+    return (cx + 0.5) * scalefactor, (cy + 0.5) * scalefactor
 
 
 def center_of_mass(img):
@@ -133,17 +197,6 @@ def hough_circle(img):
 
 def hough_ellipse(img):
 
-    from skimage import data, color
-    from skimage.filter import canny
-    from skimage.transform import hough_ellipse
-    from skimage.transform import resize
-    from skimage.draw import ellipse_perimeter
-    from skimage import io
-    from skimage.viewer import ImageViewer
-    import cv2
-
-    import numpy as np
-
     scalefactor = np.float(4)
 
 
@@ -222,15 +275,15 @@ def hough_ellipse(img):
     cx = (best[2] + corner_lt[0])
     cy = (best[1] + corner_lt[1])
 
-    return cx * scalefactor, cy * scalefactor
+    return (cx + 0.5) * scalefactor, (cy + 0.5) * scalefactor
 
 
-def starburst(img_src):
+def starburst(img):
 
     # declarations and initialisations
 
     # factor for downscaling image
-    scalefactor = 1.0
+    scalefactor = 2.0
 
     # length of rays
     raylength = int(600 / scalefactor)
@@ -238,17 +291,17 @@ def starburst(img_src):
     # threshold for gradient detection trigger
     gradient_thresh = 1
     # angular steps between rays in degree
-    angular_steps = 10
+    angular_steps = 5
 
     tone_list = []
     point_coords = []
 
     # black_img = np.zeros((500, 500), np.uint8)             # create blank image
 
-    # img_src = cv2.imread('../data/eye_new/right/20141209_Ortho_1Cam__0600.png', 0)
+    # img = cv2.imread('../data/maya/ortho_z4_f5_s024/left/left01.tif', 0)
 
     # resize image
-    img_resized = cv2.resize(img_src, (0, 0), fx=(1/scalefactor), fy=(1/scalefactor))
+    img_resized = cv2.resize(img, (0, 0), fx=(1/scalefactor), fy=(1/scalefactor))
 
     # reduce noise with median blur filter
     img = cv2.medianBlur(img_resized, 3)
@@ -411,13 +464,12 @@ def starburst(img_src):
 
 
     # fit ellipse
-
-
     if len(point_coords) != 0:
-        ellipse_points = np.matrix(point_coords)
-        ellipse = cv2.fitEllipse(ellipse_points)
-        cv2.ellipse(cimg, ellipse, (255, 0, 0), 1)
-        ellipse_center = ellipse[0]
+        ellipse_points = np.ravel(point_coords).reshape(len(point_coords), 2)
+        model, inliers = measure.ransac(ellipse_points, measure.EllipseModel, min_samples=10, residual_threshold=1, max_trials=100)
+
+        cx = model.params[0]
+        cy = model.params[1]
 
     else:
         print('No Edge Points detected!')
@@ -425,8 +477,7 @@ def starburst(img_src):
 
 
     # cv2.imshow('black', cimg)
-    elapsed = (time.clock() - start)
+    # elapsed = (time.clock() - start)
     # print 'elapsed time:', elapsed
 
-
-    return scalefactor * ellipse_center[0], scalefactor * ellipse_center[1]
+    return (cx + 0.5) * scalefactor, (cy + 0.5) * scalefactor
