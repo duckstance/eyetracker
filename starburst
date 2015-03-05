@@ -15,7 +15,220 @@ tonwert_list = []
 point_coords = []
 
 
+# black_img = np.zeros((500, 500), np.uint8) from skimage import measure, feature, io, color, draw
+from skimage import data, color
+from skimage.filter import canny
+from skimage.draw import ellipse_perimeter
+from skimage import io
+from skimage.viewer import ImageViewer
+import cv2
+
+import time
+import numpy as np
+import rough_estimation
+# declarations and initialisations
+
+# factor for downscaling image
+scalefactor = 2.0
+
+# length of rays
+raylength = int(600 / scalefactor)
+
+# threshold for gradient detection trigger
+gradient_thresh = 1
+# angular steps between rays in degree
+angular_steps = 10
+
+tone_list = []
+point_coords = []
+
 # black_img = np.zeros((500, 500), np.uint8)             # create blank image
+
+img = cv2.imread('../data/maya/ortho_z4_f5_s024/left/left05.tif', 0)
+
+# resize image
+img_resized = cv2.resize(img, (0, 0), fx=(1/scalefactor), fy=(1/scalefactor))
+
+# reduce noise with median blur filter
+img = cv2.medianBlur(img_resized, 3)
+
+# create color image copy
+cimg = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+
+# store image dimensions
+height, width = img.shape
+
+# detect rough pupil center for starburst starting point
+rough_center = rough_estimation.darkest_area(img)
+rough_center_x = rough_center[0]
+rough_center_y = rough_center[1]
+
+# if raylength exceeds image boundaries shorten length
+if raylength > (width - rough_center_x-1) or raylength > rough_center_x-1:
+    if rough_center_x <= width - rough_center_x:
+        raylength = rough_center_x-1
+    else:
+        raylength = width - rough_center_x-1
+
+if raylength > (height - rough_center_y) or raylength > rough_center_y:
+    if rough_center_y <= height - rough_center_y:
+        raylength = rough_center_y-1
+    else:
+        raylength = height - rough_center_y-1
+
+# start timer to measure runtime duration
+start = time.clock()
+
+# iterate lines from 0 to 45 degree with stepsize angular_steps. Lines with higher angle are created by mirroring
+for alpha in range(0, 46, angular_steps):
+
+    # preallocate and then reset temporary line arrays
+    line1 = np.zeros((raylength, 3), int)
+    line2 = np.zeros((raylength, 3), int)
+    line3 = np.zeros((raylength, 3), int)
+    line4 = np.zeros((raylength, 3), int)
+    line5 = np.zeros((raylength, 3), int)
+    line6 = np.zeros((raylength, 3), int)
+    line7 = np.zeros((raylength, 3), int)
+    line8 = np.zeros((raylength, 3), int)
+
+    for i in range(0, raylength):
+
+        # 1. Quadrant
+        y = np.int((np.tan(alpha * np.pi / 180) * -i) + rough_center_y)
+        x = i + rough_center_x
+
+        if 0 < y < height and 0 < x < width:
+            line1[i, 0] = img[y, x]
+            line1[i, 1] = x
+            line1[i, 2] = y
+            cimg[y, x] = 255
+
+        x = np.int((np.tan(alpha * np.pi / 180) * i) + rough_center_x)
+        y = -i + rough_center_y
+
+        if 0 < y < height and 0 < x < width:
+            line2[i, 0] = img[y, x]
+            line2[i, 1] = x
+            line2[i, 2] = y
+            cimg[y, x] = 255
+
+
+        # 2. Quadrant
+        y = np.int((np.tan(alpha * np.pi / 180) * -i) + rough_center_y)
+        x = -i + rough_center_x
+
+        if 0 < y < height and 0 < x < width:
+            line3[i, 0] = img[y, x]
+            line3[i, 1] = x
+            line3[i, 2] = y
+            cimg[y, x] = 255
+
+        x = np.int((np.tan(alpha * np.pi / 180) * -i) + rough_center_x)
+        y = -i + rough_center_y
+
+        if 0 < y < height and 0 < x < width:
+            line4[i, 0] = img[y, x]
+            line4[i, 1] = x
+            line4[i, 2] = y
+            cimg[y, x] = 255
+
+
+        # 3. quadrant
+        y = np.int((np.tan(-alpha * np.pi / 180) * -i) + rough_center_y)
+        x = -i + rough_center_x
+
+        if 0 < y < height and 0 < x < width:
+            line5[i, 0] = img[y, x]
+            line5[i, 1] = x
+            line5[i, 2] = y
+            cimg[y, x] = 255
+
+        x = np.int((np.tan(-alpha * np.pi / 180) * i) + rough_center_x)
+        y = i + rough_center_y
+
+        if 0 < y < height and 0 < x < width:
+            line6[i, 0] = img[y, x]
+            line6[i, 1] = x
+            line6[i, 2] = y
+            cimg[y, x] = 255
+
+
+        # 4. Quadrant
+        y = np.int((np.tan(alpha * np.pi / 180) * i) + rough_center_y)
+        x = i + rough_center_x
+
+        if 0 < y < height and 0 < x < width:
+            line7[i, 0] = img[y, x]
+            line7[i, 1] = x
+            line7[i, 2] = y
+            cimg[y, x] = 255
+
+        x = np.int((np.tan(alpha * np.pi / 180) * i) + rough_center_x)
+        y = i + rough_center_y
+
+        if 0 < y < height and 0 < x < width:
+            line8[i, 0] = img[y, x]
+            line8[i, 1] = x
+            line8[i, 2] = y
+            cimg[y, x] = 255
+
+
+    tone_list.append(line1)
+    tone_list.append(line2)
+    tone_list.append(line3)
+    tone_list.append(line4)
+    tone_list.append(line5)
+    tone_list.append(line6)
+    tone_list.append(line7)
+    tone_list.append(line8)
+
+
+for k in tone_list:
+
+    gradient = np.absolute(np.gradient(k[:, 0]))
+    # print k[:, 0], '\n', gradient
+    # plt.plot(gradient)
+    # plt.ylabel('some numbers')
+    # plt.show()
+
+    position = np.where(gradient == gradient.max())
+    first_coord = position[0]
+    # take center for multiple gradient maxima
+    center_1 = ((np.amin(first_coord) + np.amax(first_coord)) / 2)
+
+    edge_point = k[center_1]
+    edge_coord_x = edge_point[1]
+    edge_coord_y = edge_point[2]
+
+    if 1 < edge_coord_x < width-1 and 1 < edge_coord_y < height-1 and gradient.max() > gradient_thresh:
+        edge_temp = edge_coord_x, edge_coord_y
+        point_coords.append(edge_temp)
+
+
+    cimg[edge_coord_y, edge_coord_x] = (0, 0, 255)
+
+
+# fit ellipse
+if len(point_coords) != 0:
+    ellipse_points = np.ravel(point_coords).reshape(len(point_coords), 2)
+    model, inliers = measure.ransac(ellipse_points, measure.EllipseModel, min_samples=10, residual_threshold=1, max_trials=50)
+
+    cx = model.params[0]
+    cy = model.params[1]
+
+else:
+    print('No Edge Points detected!')
+    cx = 0
+    cy = 0
+
+
+# cv2.imshow('black', cimg)
+elapsed = (time.clock() - start)
+# print 'elapsed time:', elapsed
+
+
+print cx * scalefactor, cy * scalefactor            # create blank image
 
 img_src = cv2.imread('../data/eye_new/right/3.png', 0)
 img_small = cv2.resize(img_src, (0, 0), fx=(1/scalefactor), fy=(1/scalefactor))
