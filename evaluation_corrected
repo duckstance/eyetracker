@@ -21,14 +21,15 @@ def calibpoint_evaluation(calib_points, pupil_measured):
     pixelpitch_monitor = 0.058  # 0.0576510902161  # cm/px
 
     # Maya Kamera data / all in cm
-    focal_length = 0.5 #3.9938  #z4: 0.4938
-    alpha = (np.pi / 180) * 45   # camera angle
+    focal_length = 1.4 #0.5455
+    alpha = (np.pi / 180) * 0   # camera angle
     beta = (np.pi / 180) * 180
-    korr = 0#0.02687
-    # camera_world_ortho = [[0],[0],[4.0]]
-    camera_world_ortho = np.float64([[0],[-2.828],[2.828]])
-    camera_world_z25 = [[0],[-16.97],[17.97]]
-    camera_world_z4 = [[0],[-2.121],[3.121]]
+
+    # camera_world_ortho = np.float64([[0], [-2.82835], [2.828427125]])
+    camera_world_ortho = np.float64([[0], [0], [4.0]])
+    # camera_world_z25_angle = [[0],[-16.97],[17.97]]
+    # camera_world_ortho = np.float64([[0],[-2.828],[2.828]])
+    # camera_world_z4 = [[0],[-2.121],[3.121]]
     x_K = camera_world_ortho[0]
     y_K = camera_world_ortho[1]
     z_K = camera_world_ortho[2]
@@ -80,17 +81,14 @@ def calibpoint_evaluation(calib_points, pupil_measured):
 
         l2 = - l1
 
-        x_I1 = x_P_left + l1 * (x_K - x_P_left * (x_P_left * x_K + y_P_left * y_K + z_P_left * z_K) / aux0)
+        x_I1 = x_P_left + l1 * (x_K - x_P_left * (x_P_left * x_K + y_P_left * y_K + z_P_left * z_K) / aux0)     # iris intersection point 1
         y_I1 = y_P_left + l1 * (y_K - y_P_left * (y_P_left * x_K + y_P_left * y_K + z_P_left * z_K) / aux0)
         z_I1 = z_P_left + l1 * (z_K - z_P_left * (z_P_left * x_K + y_P_left * y_K + z_P_left * z_K) / aux0)
 
-        x_I2 = x_P_left + l2 * (x_K - x_P_left * (x_P_left * x_K + y_P_left * y_K + z_P_left * z_K) / aux0)
+        x_I2 = x_P_left + l2 * (x_K - x_P_left * (x_P_left * x_K + y_P_left * y_K + z_P_left * z_K) / aux0)     # iris intersection point 1
         y_I2 = y_P_left + l2 * (y_K - y_P_left * (y_P_left * x_K + y_P_left * y_K + z_P_left * z_K) / aux0)
         z_I2 = z_P_left + l2 * (z_K - z_P_left * (z_P_left * x_K + y_P_left * y_K + z_P_left * z_K) / aux0)
 
-
-        # t = (x_I1*(x_K - x_KT) + y_I1*(y_K - y_KT) + z_I1*(z_K - z_KT) + (x_I1 - x_K)*(x_K - x_KT) + (y_I1 - y_K)*(y_K - y_KT) + \
-        #    (z_I1 - z_K)*(z_K - z_KT)) / ((x_I2 - x_K)*(x_K - x_KT) + (y_I2 - y_K)*(y_K - y_KT) + (z_I2 - z_K)*(z_K - z_KT))
         t =((x_I1 - x_K)*(x_K - x_KT) + (y_I1 - y_K)*(y_K - y_KT) + (z_I1 - z_K)*(z_K - z_KT))/((x_I2 - x_K)*(x_K - x_KT) + (y_I2 - y_K)*(y_K - y_KT) + (z_I2 - z_K)*(z_K - z_KT))
 
         x_E = t * (x_I2 - x_K) + x_K
@@ -156,7 +154,7 @@ def calibpoint_evaluation(calib_points, pupil_measured):
     print pupil_edist
     print 'Min Error:','\t', pupil_edist_min
     print 'Max Error:','\t', pupil_edist_max
-    print 'Mean Error:', pupil_mean_error
+    print 'Mean Error:','\t', pupil_mean_error
     print 'Std:','\t\t', pupil_std
     print 'Median:','\t', pupil_median
 
@@ -168,7 +166,7 @@ def calibpoint_evaluation(calib_points, pupil_measured):
     plot1_y = np.ravel(pupil_calculated_left[:, 1]).reshape(25, 1)
     plot2_x = np.ravel(pupil_measured[:, 0]).reshape(25, 1)
     plot2_y = np.ravel(pupil_measured[:, 1]).reshape(25, 1)
-    plt.figure(num=None,  dpi=140, facecolor='w', edgecolor='k') #figsize=(7, 7),
+    plt.figure(num=None, figsize=(6.5, 6), dpi=140, facecolor='w', edgecolor='k') #figsize=(7, 7),
     plt.grid(color='0.5')
     plt.axhline(0, color='k')
     plt.axvline(0, color='k')
@@ -176,8 +174,8 @@ def calibpoint_evaluation(calib_points, pupil_measured):
     plt.plot(plot_x,plot_y, 'kx')
     # plt.plot(plot1_x,plot1_y, 'bx')
     # plt.plot(plot2_x,plot2_y, 'rx')
-    plt.axis([-0.05, 0.05, -0.05, 0.05])
-
+    # plt.axis([-0.4, 0.4, -0.4, 0.4])
+    plt.subplots_adjust(left=0.14, right=0.86)
     plt.xlabel('$\Delta x$ (Pixel)')
     plt.ylabel('$\Delta y$ (Pixel)')
 
@@ -196,14 +194,14 @@ def calibpoint_evaluation(calib_points, pupil_measured):
     # print loaded_edist
 
     ## --- saving data to file ---
-    f = open("../data/accuracy/max_genauigkeit/z4.txt", "w")
+    f = open("../data/pupil_calc.txt", "w")
     number = 1
-    for save in pupil_edist:
+    for save in pupil_calculated_left:
 
-        f.write(str(number) + '\t' + str(save) + "\n")  # str() converts to string
+        f.write(str(save) + "\n")  # str() converts to string
 
-        number += 1
-    f.write('Min\t' + str(pupil_edist_min) + "\n" + 'Max\t' + str(pupil_edist_max) + "\n" + 'Mean\t' + str(pupil_mean_error) + "\n" + 'Std\t' + str(pupil_std) + '\n' + 'Median\t' + str(pupil_median))
+
+    # f.write('Min\t' + str(pupil_edist_min) + "\n" + 'Max\t' + str(pupil_edist_max) + "\n" + 'Mean\t' + str(pupil_mean_error) + "\n" + 'Std\t' + str(pupil_std) + '\n' + 'Median\t' + str(pupil_median))
     f.close()
 
 
