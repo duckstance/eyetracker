@@ -8,11 +8,13 @@ import os
 from scipy.spatial.distance import cdist
 from scipy.spatial import distance
 import matplotlib.pyplot as plt
-
+import time
 # import functions
 import pupil_detection
 import rough_estimation
-import evaluation
+import evaluation,evaluation_angle,evaluation_corrected
+
+start = time.clock()    # start timer
 
 filelist = []
 imglist = []
@@ -36,6 +38,7 @@ sensor_height_px = 2160         # px
 sensor_diagonal = 0.63          # cm
 
 
+
 # calib_points = np.float32([[240, 135], [1680, 135], [1680, 945], [240, 945], [960, 540]])   # for 5 points
 calib_points = np.float32([[0, 0],     [480, 0],   [960, 0],   [1440, 0],   [1920, 0],        # for 25 points
                            [1920, 270],[1440, 270],[960, 270], [480, 270],  [0, 270],
@@ -45,9 +48,9 @@ calib_points = np.float32([[0, 0],     [480, 0],   [960, 0],   [1440, 0],   [192
 
 
 ## --- load eye images ---
-for root, dirs, files in os.walk(r'../data/maya/angle_z4_f5_45grad/left'):     # create filelist of source images   ortho_z25_f40_s024  ortho_z4_f5_s024
+for root, dirs, files in os.walk(r'../data/tests/z4_f14_res/left'):     # create filelist of source images  z100_f18    z4_f5.4545      z4_f14      z4_45grad
     for file in files:
-        if file.endswith('.tif'):
+        if file.endswith('.png'):
             filelist.append(root+'/'+file)
 
 for imagefile in filelist:                                  # load source images ans store in list
@@ -59,49 +62,54 @@ for imagefile in filelist:                                  # load source images
 
 height, width = img_load.shape                              # get image size
 
+count = 1
 for img in imglist:
 
     ## --- pupil detection method ---
+    imagesize_factor = 1.0
+    # center = pupil_detection.darkest_pixel(img, imagesize_factor)
+    # center = pupil_detection.distance_transform(img, imagesize_factor)
+    # center = pupil_detection.center_of_mass(img, imagesize_factor)
+    # center = pupil_detection.edge_ellipse_fit(img, imagesize_factor)
+    # center = pupil_detection.ransac_ellipse_fit(img, imagesize_factor)
+    # center = pupil_detection.starburst(img, imagesize_factor)
+    center = pupil_detection.hough_ellipse(img, imagesize_factor)
 
-    # center = pupil_detection.darkest_pixel(img)
-    # center = pupil_detection.edge_ellipse_fit(img)
-    center = pupil_detection.center_of_mass(img)
-    # center = pupil_detection.distance_transform(img)
-    # center = pupil_detection.hough_circle(img)
-    # center = pupil_detection.hough_ellipse(img)
-    # center = pupil_detection.starburst(img)
 
     if center is not None:
+        print 'processing image:', count, '/ 25'
+        count += 1
         pupilcenter_list.append(center)
+        print center
     else:
         print('No Circles Detected!')
 
 # center pupil coordinates to origin
 pupilcenter_imgcoords = np.ravel(pupilcenter_list).reshape(25, 2)
 
-pupil_coords_x = np.subtract(np.reshape(pupilcenter_imgcoords[:, 0],(25, 1)), width) * (-1)     # flip x-coordinates
-pupil_coords_y = np.subtract(np.reshape(pupilcenter_imgcoords[:, 1],(25, 1)), height) * (-1)    # flip y-coordinates
-pupilcenter_coords = np.hstack((pupil_coords_x, pupil_coords_y))    # standard XY-Coordinate System
+pupil_coords_img_x = np.reshape(pupilcenter_imgcoords[:, 0],(25, 1)) #np.subtract(np.reshape(pupilcenter_imgcoords[:, 0],(25, 1)), width)  * (-1)    # flip x-coordinates
+pupil_coords_img_y = np.subtract(np.reshape(pupilcenter_imgcoords[:, 1],(25, 1)), height) * (-1)    # flip y-coordinates
+pupilcenter_coords = np.hstack((pupil_coords_img_x, pupil_coords_img_y))
 
-pupil_centered = np.subtract(pupilcenter_coords[:,:], ((width / 2) + 0.5, (height / 2) + 0.5))  #pupil_coords = np.subtract(pupilcenter_matrix[:,:], center_coordinate)
+pupil_centered = np.subtract(pupilcenter_coords[:,:], ((width / 2), (height / 2)))  #pupil_coords = np.subtract(pupilcenter_matrix[:,:], center_coordinate)
 
 ## -- plot --
-pupil_coords_x = np.ravel(pupil_centered[:, 0]).reshape(25, 1)
-pupil_coords_y = np.ravel(pupil_centered[:, 1]).reshape(25, 1)
-
-plt.figure(num=None, figsize=(16, 9), dpi=80, facecolor='w', edgecolor='k')
-plt.plot(pupil_coords_x, pupil_coords_y, 'ko')
-# plt.axis([-5, 5, -5, 5])
-plt.xlabel('x-Richtung')
-plt.ylabel('y-Richtung')
-
-for i in range(1,26):
-    plt.annotate(i, xy=(pupil_coords_x[i - 1], pupil_coords_y[i - 1]), color='r')
-
-plt.show()
+# pupil_coords_x = np.ravel(pupil_centered[:, 0]).reshape(25, 1)
+# pupil_coords_y = np.ravel(pupil_centered[:, 1]).reshape(25, 1)
+#
+# plt.figure(num=None, figsize=(16, 9), dpi=80, facecolor='w', edgecolor='k')
+# plt.plot(pupil_coords_x, pupil_coords_y, 'ko')
+# # plt.axis([-5, 5, -5, 5])
+# plt.xlabel('x-Richtung')
+# plt.ylabel('y-Richtung')
+#
+# for i in range(1,26):
+#     plt.annotate(i, xy=(pupil_coords_x[i - 1], pupil_coords_y[i - 1]), color='r')
+#
+# plt.show()
 
 # calculate target coordinates
-[sensor_coords_left, sensor_coords_right] = evaluation.calibpoint_evaluation(calib_points, pupil_centered)
+[sensor_coords_left, sensor_coords_right] = evaluation_corrected.calibpoint_evaluation(calib_points, pupil_centered)
 
 ## --- radial distortion correction ---
 
@@ -158,6 +166,9 @@ dist = np.sqrt(np.square(error[:, 0]) + np.square(error[:, 1]))     # euclidian 
 # distance = evaluation.distance_calc(dst_Array)
 
 # print 'distance: \n', dist, '\n Max:', np.max(dist)
+
+elapsed = (time.clock() - start)
+print 'elapsed time:', elapsed
 
 cv2.waitKey(0)
 cv2.destroyAllWindows()
