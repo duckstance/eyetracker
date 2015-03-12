@@ -55,8 +55,13 @@ def distance_transform(img, scalefactor):
     img_blur = cv2.GaussianBlur(median, (7, 7), 0)
     img_small = cv2.resize(img_blur, (0, 0), fx=(1 / scalefactor), fy=(1 / scalefactor))
     ret, thresh = cv2.threshold(img_small, 30, 255, cv2.THRESH_BINARY_INV)
-    plt.imshow(thresh, cmap=plt.cm.gray, interpolation='none')
-    plt.show()
+
+    contours = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    cnt = contours[0]
+    cv2.drawContours(thresh, cnt, 0, 255, -1)
+
+    # plt.imshow(thresh, cmap=plt.cm.gray, interpolation='none')
+    # plt.show()
     dist_transform = cv2.distanceTransform(thresh, cv2.cv.CV_DIST_C, 3)
     # equalized = cv2.normalize(dist_transform, alpha=0., beta=1., norm_type=cv2.NORM_MINMAX)
     #
