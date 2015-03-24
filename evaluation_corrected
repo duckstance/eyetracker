@@ -9,8 +9,12 @@ import cPickle as pickle
 
 import rough_estimation
 
+from pylab import *
+plt.rc('text', usetex=True)
+plt.rcParamsDefault
 
-def calibpoint_evaluation(calib_points, pupil_measured):
+def calibpoint_evaluation(calib_points, pupil_measured, image_resolution_divider):
+
 
     sensor_coords_list_left = []
     sensor_coords_list_right = []
@@ -21,8 +25,8 @@ def calibpoint_evaluation(calib_points, pupil_measured):
     pixelpitch_monitor = 0.058  # 0.0576510902161  # cm/px
 
     # Maya Kamera data / all in cm
-    focal_length = 1.4 #0.5455
-    alpha = (np.pi / 180) * 0   # camera angle
+    focal_length = 0.5455 #0.5455
+    alpha = (np.pi / 180) * 0  # camera angle
     beta = (np.pi / 180) * 180
 
     # camera_world_ortho = np.float64([[0], [-2.82835], [2.828427125]])
@@ -33,17 +37,13 @@ def calibpoint_evaluation(calib_points, pupil_measured):
     x_K = camera_world_ortho[0]
     y_K = camera_world_ortho[1]
     z_K = camera_world_ortho[2]
-    camera_target = np.float64([[0],[0],[0]])
-    x_KT = camera_target[0]
-    y_KT = camera_target[1]
-    z_KT = camera_target[2]
 
     sensor_width = 0.54864 #0.549092588388cm   # 0,21617771023622047244094488188976"
     sensor_width_px = 3840
     sensor_height = 0.30988 #0.308864580969  # 0,1215999622047244094488188976378"
     sensor_height_px = 2160
     sensor_diagonal = 0.63
-    pixelpitch_sensor = 0.00015875 #0.000142992861559 # 0.00015875 0001607
+    pixelpitch_sensor = 0.00015875 * 2.0 # image_resolution_divider #0.000142992861559 # 0.00015875 0001607
 
     # eye data
     eye_radius = 1.165
@@ -77,7 +77,7 @@ def calibpoint_evaluation(calib_points, pupil_measured):
         aux1 = x_K ** 2 * y_P_left ** 2 + x_K ** 2 * z_P_left ** 2 - 2 * x_K * x_P_left * y_K * y_P_left - 2 * x_K * x_P_left * z_K * z_P_left + \
                x_P_left ** 2 * y_K ** 2 + x_P_left ** 2 * z_K ** 2 + y_K ** 2 * z_P_left ** 2 - 2 * y_K * y_P_left * z_K * z_P_left + y_P_left ** 2 * z_K ** 2
 
-        l1 = r_P * aux0 * np.sqrt(aux1 / aux0) / aux1
+        l1 = r_P * np.sqrt(aux0/aux1)
 
         l2 = - l1
 
@@ -89,7 +89,7 @@ def calibpoint_evaluation(calib_points, pupil_measured):
         y_I2 = y_P_left + l2 * (y_K - y_P_left * (y_P_left * x_K + y_P_left * y_K + z_P_left * z_K) / aux0)
         z_I2 = z_P_left + l2 * (z_K - z_P_left * (z_P_left * x_K + y_P_left * y_K + z_P_left * z_K) / aux0)
 
-        t =((x_I1 - x_K)*(x_K - x_KT) + (y_I1 - y_K)*(y_K - y_KT) + (z_I1 - z_K)*(z_K - z_KT))/((x_I2 - x_K)*(x_K - x_KT) + (y_I2 - y_K)*(y_K - y_KT) + (z_I2 - z_K)*(z_K - z_KT))
+        t = (x_K*(x_I1 - x_K) + y_K*(y_I1 - y_K) + z_K*(z_I1 - z_K))/(x_K*(x_I2 - x_K) + y_K*(y_I2 - y_K) + z_K*(z_I2 - z_K))
 
         x_E = t * (x_I2 - x_K) + x_K
         y_E = t * (y_I2 - y_K) + y_K
@@ -140,7 +140,7 @@ def calibpoint_evaluation(calib_points, pupil_measured):
     pupil_calculated_x = np.ravel(pupil_calculated_left[:, 0]).reshape(25, 1)
     pupil_calculated_y = np.ravel(pupil_calculated_left[:, 1]).reshape(25, 1)
 
-    pupil_error = np.subtract(pupil_measured, pupil_calculated_left)   # choose left or right eye coords
+    pupil_error = np.subtract(pupil_measured, pupil_calculated_left)   # choose left or right eye coords     np.multiply(pupil_measured, image_resolution_divider)
     # print pupil_measured
     pupil_error_x = np.ravel(pupil_error[:, 0]).reshape(25, 1)
     pupil_error_y = np.ravel(pupil_error[:, 1]).reshape(25, 1)
@@ -152,13 +152,12 @@ def calibpoint_evaluation(calib_points, pupil_measured):
     pupil_median = np.median(pupil_edist)
 
     print pupil_edist
+    print 'Mean Error:','\t', pupil_mean_error
     print 'Min Error:','\t', pupil_edist_min
     print 'Max Error:','\t', pupil_edist_max
-    print 'Mean Error:','\t', pupil_mean_error
     print 'Std:','\t\t', pupil_std
     print 'Median:','\t', pupil_median
 
-    ## plot
 
     plot_x = pupil_error_x
     plot_y = pupil_error_y
@@ -176,33 +175,35 @@ def calibpoint_evaluation(calib_points, pupil_measured):
     # plt.plot(plot2_x,plot2_y, 'rx')
     # plt.axis([-0.4, 0.4, -0.4, 0.4])
     plt.subplots_adjust(left=0.14, right=0.86)
-    plt.xlabel('$\Delta x$ (Pixel)')
-    plt.ylabel('$\Delta y$ (Pixel)')
+    plt.xlabel('$\Delta \mathrm{x\ (Pixel)}$')
+    plt.ylabel('$\Delta \mathrm{y\ (Pixel)}$')
 
     for i in range(1,26):
         plt.annotate(i, xy=(plot_x[i - 1], plot_y[i - 1]), xytext = (-0.2, 0.2), textcoords = 'offset points', ha = 'right', va = 'bottom', color='0.4')
     # plt.savefig('foo.pdf', figsize=(7, 7), bbox_inches='tight')
     plt.show()
 
-    # ## --- Saving the objects ---
-    # with open('../data/accuracy/ortho_z25_f40_centermass_original.pickle', 'w') as file:
-    #     pickle.dump([pupil_error, pupil_edist, pupil_edist_min, pupil_edist_max, pupil_mean_error, pupil_std, pupil_median], file)
+
+    ## --- Saving the objects ---
+    # with open('../data/tests/test_0.pickle', 'w') as file:
+    #     pickle.dump([pupil_calculated_left, pupil_measured, pupil_error, pupil_edist, pupil_edist_min, pupil_edist_max, pupil_mean_error, pupil_std, pupil_median], file)
+    # ## plot
 
     ## --- Loading the objects ---
     # with open('data.pickle') as file:
     #     pupil_error, pupil_edist, pupil_edist_min, pupil_edist_max, pupil_mean_error, pupil_std, pupil_median = pickle.load(file)
     # print loaded_edist
 
-    ## --- saving data to file ---
-    f = open("../data/pupil_calc.txt", "w")
-    number = 1
-    for save in pupil_calculated_left:
-
-        f.write(str(save) + "\n")  # str() converts to string
-
-
-    # f.write('Min\t' + str(pupil_edist_min) + "\n" + 'Max\t' + str(pupil_edist_max) + "\n" + 'Mean\t' + str(pupil_mean_error) + "\n" + 'Std\t' + str(pupil_std) + '\n' + 'Median\t' + str(pupil_median))
-    f.close()
+    # ## --- saving data to file ---
+    # f = open("../data/pupil_calc.txt", "w")
+    # number = 1
+    # for save in pupil_calculated_left:
+    #
+    #     f.write(str(save) + "\n")  # str() converts to string
+    #
+    #
+    # # f.write('Min\t' + str(pupil_edist_min) + "\n" + 'Max\t' + str(pupil_edist_max) + "\n" + 'Mean\t' + str(pupil_mean_error) + "\n" + 'Std\t' + str(pupil_std) + '\n' + 'Median\t' + str(pupil_median))
+    # f.close()
 
 
     return pupil_calculated_left, pupil_calculated_right
