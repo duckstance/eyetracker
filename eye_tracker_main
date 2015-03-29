@@ -10,165 +10,266 @@ from scipy.spatial import distance
 import matplotlib.pyplot as plt
 import time
 # import functions
-import pupil_detection
+import pupil_detection_optimal as pupil_detection
 import rough_estimation
 import evaluation,evaluation_angle,evaluation_corrected
+import calibration
+from scipy.optimize import fmin
 
 start = time.clock()    # start timer
 
-filelist = []
-imglist = []
-cimglist = []
-pupilcenter_list = []
-corrected_coords = []
+filelist_left = []
+filelist_right = []
+imglist_left = []
+imglist_right = []
+cimglist_left = []
+cimglist_right = []
+pupilcenter_list_left = []
+pupilcenter_list_right = []
+corrected_coords_left = []
+corrected_coords_right = []
 corrected_coords_x = []
 corrected_coords_y = []
 # Mat_centers = np.zeros((5, 3), np.float32)      # Zeilen, Spalten
 
-pixelpitch_monitor = 0.058  # cm/px
-pixelpitch_sensor = 0.00015875
-distance_eye_monitor = 200.0
+img_resolution_factor = 1.0
+pixelpitch_monitor = 0.058      # cm/px
+pixelpitch_sensor = 0.00015875  # cm/px
+distance_eye_monitor = 200.0    # cm
+distance_eyes = 6.4             # cm
+monitor_res_x = 1920.0            # px
+monitor_res_y = 1080.0            # px
 
 # Maya Kamera data
 focal_lenght = 3.8              # cm
 sensor_width = 0.549092588388   # cm
-sensor_width_px = 3840          # px
+sensor_width_px = 3840.0          # px
 sensor_height = 0.308864580969  # cm
-sensor_height_px = 2160         # px
+sensor_height_px = 2160.0         # px
 sensor_diagonal = 0.63          # cm
 
 
+# load left eye images
+for root, dirs, imgfiles in os.walk(r'../data/tests/3D/calibration/left'):     # create filelist of source images  z100_f18    z4_f5.4545      z4_f14      z4_45grad  photometric/noise/left
+    for imgfile in imgfiles:
+        if imgfile.endswith('.png'):
+            filelist_left.append(root+'/'+imgfile)
 
-# calib_points = np.float32([[240, 135], [1680, 135], [1680, 945], [240, 945], [960, 540]])   # for 5 points
-calib_points = np.float32([[0, 0],     [480, 0],   [960, 0],   [1440, 0],   [1920, 0],        # for 25 points
-                           [1920, 270],[1440, 270],[960, 270], [480, 270],  [0, 270],
-                           [0, 540],   [480, 540], [960, 540], [1440, 540], [1920, 540],
-                           [1920, 810],[1440, 810],[960, 810], [480, 810],  [0, 810],
-                           [0, 1080],  [480, 1080],[960, 1080],[1440, 1080],[1920, 1080]])
+for imagefile in filelist_left:
+    img = cv2.imread(imagefile, 0)
+    imglist_left.append(img)
+    cimg_left = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
 
+# load right eye images
+for root, dirs, imgfiles in os.walk(r'../data/tests/3D/calibration/right'):     # create filelist_right of source images  z100_f18    z4_f5.4545      z4_f14      z4_45grad  photometric/noise/left
+    for imgfile in imgfiles:
+        if imgfile.endswith('.png'):
+            filelist_right.append(root+'/'+imgfile)
 
-## --- load eye images ---
-for root, dirs, files in os.walk(r'../data/tests/z4_f14_res/left'):     # create filelist of source images  z100_f18    z4_f5.4545      z4_f14      z4_45grad
-    for file in files:
-        if file.endswith('.png'):
-            filelist.append(root+'/'+file)
+for imagefile in filelist_right:
+    img = cv2.imread(imagefile, 0)
+    imglist_right.append(img)
+    cimg_right = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+    cimglist_right.append(cimg_right)
 
-for imagefile in filelist:                                  # load source images ans store in list
-    img_load = cv2.imread(imagefile, 0)
-    imglist.append(img_load)
+number_imgs = len(imglist_left)
 
-    cimg = cv2.cvtColor(img_load, cv2.COLOR_GRAY2BGR)
-    cimglist.append(cimg)
+height, width = img.shape       # get image size
+height /= img_resolution_factor
+width /= img_resolution_factor
 
-height, width = img_load.shape                              # get image size
-
+# detect pupil center in left eye images
 count = 1
-for img in imglist:
+for left_img in imglist_left:
 
     ## --- pupil detection method ---
-    imagesize_factor = 1.0
-    # center = pupil_detection.darkest_pixel(img, imagesize_factor)
-    # center = pupil_detection.distance_transform(img, imagesize_factor)
-    # center = pupil_detection.center_of_mass(img, imagesize_factor)
-    # center = pupil_detection.edge_ellipse_fit(img, imagesize_factor)
-    # center = pupil_detection.ransac_ellipse_fit(img, imagesize_factor)
-    # center = pupil_detection.starburst(img, imagesize_factor)
-    center = pupil_detection.hough_ellipse(img, imagesize_factor)
+
+    # center = pupil_detection.darkest_pixel(left_img, img_resolution_factor)
+    # center = pupil_detection.distance_transform(left_img, img_resolution_factor)
+    center = pupil_detection.center_of_mass(left_img, img_resolution_factor)
+    # center = pupil_detection.edge_ellipse_fit(left_img, img_resolution_factor)
+    # center = pupil_detection.ransac_ellipse_fit(left_img, img_resolution_factor)
+    # center = pupil_detection.starburst(left_img, img_resolution_factor)
+    # center = pupil_detection.hough_ellipse(left_img, img_resolution_factor)
 
 
     if center is not None:
-        print 'processing image:', count, '/ 25'
+        # print 'processing left image:', count, '/ 25'
         count += 1
-        pupilcenter_list.append(center)
-        print center
+        pupilcenter_list_left.append(center)
+        # print center
     else:
-        print('No Circles Detected!')
+        print('No Pupils Detected!')
 
-# center pupil coordinates to origin
-pupilcenter_imgcoords = np.ravel(pupilcenter_list).reshape(25, 2)
-
-pupil_coords_img_x = np.reshape(pupilcenter_imgcoords[:, 0],(25, 1)) #np.subtract(np.reshape(pupilcenter_imgcoords[:, 0],(25, 1)), width)  * (-1)    # flip x-coordinates
-pupil_coords_img_y = np.subtract(np.reshape(pupilcenter_imgcoords[:, 1],(25, 1)), height) * (-1)    # flip y-coordinates
+# rearrange pupil coordinates to camera image center origin
+pupilcenter_imgcoords = np.ravel(pupilcenter_list_left).reshape(number_imgs, 2)
+pupil_coords_img_x = np.reshape(pupilcenter_imgcoords[:, 0], (number_imgs, 1))
+pupil_coords_img_y = np.subtract(np.reshape(pupilcenter_imgcoords[:, 1], (number_imgs, 1)), height) * (-1)    # flip y-coordinates
 pupilcenter_coords = np.hstack((pupil_coords_img_x, pupil_coords_img_y))
+pupil_centered_left = np.subtract(pupilcenter_coords[:,:], ((width / 2), (height / 2)))
 
-pupil_centered = np.subtract(pupilcenter_coords[:,:], ((width / 2), (height / 2)))  #pupil_coords = np.subtract(pupilcenter_matrix[:,:], center_coordinate)
+# calibration
+norm_factor_left, HomographyMat_left = calibration.calibrate('left', img_resolution_factor)
 
-## -- plot --
-# pupil_coords_x = np.ravel(pupil_centered[:, 0]).reshape(25, 1)
-# pupil_coords_y = np.ravel(pupil_centered[:, 1]).reshape(25, 1)
-#
-# plt.figure(num=None, figsize=(16, 9), dpi=80, facecolor='w', edgecolor='k')
-# plt.plot(pupil_coords_x, pupil_coords_y, 'ko')
-# # plt.axis([-5, 5, -5, 5])
-# plt.xlabel('x-Richtung')
-# plt.ylabel('y-Richtung')
-#
-# for i in range(1,26):
-#     plt.annotate(i, xy=(pupil_coords_x[i - 1], pupil_coords_y[i - 1]), color='r')
-#
-# plt.show()
-
-# calculate target coordinates
-[sensor_coords_left, sensor_coords_right] = evaluation_corrected.calibpoint_evaluation(calib_points, pupil_centered)
-
-## --- radial distortion correction ---
-
-# alpha_corner = np.arctan(np.sqrt(np.square(960) + np.square(540)) / 3469.1451497)  #angle between monitor corner, monitor center and eye
-
-norm_factor = 960 / np.absolute(pupil_centered[0,0])
-
-for coord in pupil_centered:
-
-    alpha_current = np.arctan(np.sqrt((coord[0] * norm_factor) ** 2 + (coord[1] * norm_factor) ** 2) / (distance_eye_monitor / pixelpitch_monitor))
+# --- radial distortion correction ---
+for coord in pupil_centered_left:
+    alpha_current = np.arctan(np.sqrt((coord[0] * norm_factor_left) ** 2 + (coord[1] * norm_factor_left) ** 2))# / 1000.0)
     if alpha_current == 0:      # avoid division by 0
-        factor = 0
+        radial_correction_factor = 0
     else:
-        factor = np.tan(alpha_current) / np.sin(alpha_current)
+        radial_correction_factor = np.tan(alpha_current) / np.sin(alpha_current)
+    corrected_coords_left.append(coord * radial_correction_factor) # 1.05124209
+corrected_coordsmat_left = np.ravel(corrected_coords_left).reshape(number_imgs, 2)
 
-    corrected_coords.append(coord * factor)
+sensor_coords_corr_left = np.ravel(np.float32(corrected_coordsmat_left)).reshape(-1, number_imgs, 2)
 
-corrected_coords_matrix = np.ravel(corrected_coords).reshape(25, 2)
-
-centered_centerlist = np.add(corrected_coords_matrix[:,:], ((width / 2), (height / 2)))
-
-## -- plot --
-# pupil_coords_x = np.ravel(centered_centerlist[:, 0]).reshape(25, 1)
-# pupil_coords_y = np.ravel(centered_centerlist[:, 1]).reshape(25, 1)
-#
-# plt.figure(num=None, figsize=(16, 9), dpi=80, facecolor='w', edgecolor='k')
-# plt.plot(pupil_coords_x, pupil_coords_y, 'ko')
-# # plt.axis([-5, 5, -5, 5])
-# plt.xlabel('x-Richtung')
-# plt.ylabel('y-Richtung')
-#
-# for i in range(1,26):
-#     plt.annotate(i, xy=(pupil_coords_x[i - 1], pupil_coords_y[i - 1]), color='r')
-#
-# plt.show()
-
-src_Points = np.float32(centered_centerlist)
-
-H, mask = cv2.findHomography(src_Points, calib_points) #, cv2.RANSAC, 5.0) cv2.LMEDS)             # find perspective transformation Matrix H
-
-pts = np.ravel(src_Points).reshape(-1, 25, 2)
-
-if H is not None:
-    dst_Array = cv2.perspectiveTransform(pts, H)
-    # print dst_Array
+if HomographyMat_left is not None:
+    transformed_points_left = cv2.perspectiveTransform(sensor_coords_corr_left, HomographyMat_left)
+    # print transformed_points_left
 else:
     print('No Homography Matrix created!')
 
-# print calib_points, '\n', dst_Array
-error = np.matrix(np.subtract(calib_points, dst_Array))            # difference between x,y coords of source points and calibrated points
-dist = np.sqrt(np.square(error[:, 0]) + np.square(error[:, 1]))     # euclidian distance between calibration points and mapped points
+# ----------------------------------------------------------------------------------------------------------------------
+# detect pupil center in right eye images
+count = 1
+for right_img in imglist_right:
+
+    ## --- pupil detection method ---
+
+    # center = pupil_detection.darkest_pixel(right_img, img_resolution_factor)
+    # center = pupil_detection.distance_transform(right_img, img_resolution_factor)
+    center = pupil_detection.center_of_mass(right_img, img_resolution_factor)
+    # center = pupil_detection.edge_ellipse_fit(right_img, img_resolution_factor)
+    # center = pupil_detection.ransac_ellipse_fit(right_img, img_resolution_factor)
+    # center = pupil_detection.starburst(right_img, img_resolution_factor)
+    # center = pupil_detection.hough_ellipse(right_img, img_resolution_factor)
+
+
+    if center is not None:
+        # print 'processing right image:', count, '/ 25'
+        count += 1
+        pupilcenter_list_right.append(center)
+        # print center
+    else:
+        print('No Pupils Detected!')
+
+# rearrange pupil coordinates to camera image center origin
+pupilcenter_imgcoords = np.ravel(pupilcenter_list_right).reshape(number_imgs, 2)
+pupil_coords_img_x = np.reshape(pupilcenter_imgcoords[:, 0], (number_imgs, 1))
+pupil_coords_img_y = np.subtract(np.reshape(pupilcenter_imgcoords[:, 1], (number_imgs, 1)), height) * (-1)    # flip y-coordinates
+pupilcenter_coords = np.hstack((pupil_coords_img_x, pupil_coords_img_y))
+pupil_centered_right = np.subtract(pupilcenter_coords[:, :], ((width / 2), (height / 2)))
+
+# calibration
+norm_factor_right, HomographyMat_right = calibration.calibrate('right', img_resolution_factor)
+
+# --- radial distortion correction ---
+for coord in pupil_centered_right:
+    alpha_current = np.arctan(np.sqrt((coord[0] * norm_factor_right) ** 2 + (coord[1] * norm_factor_right) ** 2))# / 1000.0)
+    if alpha_current == 0:      # avoid division by 0
+        radial_correction_factor = 0
+    else:
+        radial_correction_factor = np.tan(alpha_current) / np.sin(alpha_current)
+    corrected_coords_right.append(coord * radial_correction_factor) # 1.05124209
+corrected_coordsmat_right = np.ravel(corrected_coords_right).reshape(number_imgs, 2)
+
+sensor_coords_corr_right = np.ravel(np.float32(corrected_coordsmat_right)).reshape(-1, number_imgs, 2)
+
+if HomographyMat_right is not None:
+    transformed_points_right = cv2.perspectiveTransform(sensor_coords_corr_right, HomographyMat_right)
+    # print transformed_points_right
+else:
+    print('No Homography Matrix created!')
+
+# # -- plot --
+# pupil_coords_x = np.ravel(pupil_centered_left[:, 0]).reshape(number_imgs, 1)
+# pupil_coords_y = np.ravel(pupil_centered_left[:, 1]).reshape(number_imgs, 1)
+#
+# plt.figure(num=None, figsize=(16, 9), dpi=80, facecolor='w', edgecolor='k')
+# plt.plot(pupil_coords_x, pupil_coords_y, 'ko')
+# # plt.axis([-5, 5, -5, 5])
+# plt.xlabel('x-Richtung')
+# plt.ylabel('y-Richtung')
+#
+# for i in range(1,number_imgs+1):
+#     plt.annotate(i, xy=(pupil_coords_x[i - 1], pupil_coords_y[i - 1]), xytext = (-0.2, 0.2), textcoords = 'offset points', ha = 'right', va = 'bottom', color='0.1')
+#
+# plt.show()
+
 
 ## calculate distance
-# distance = evaluation.distance_calc(dst_Array)
+# distance = evaluation.distance_calc(transformed_points_left)
+transformed_points2_left = transformed_points_left[0]
+pupil_error_left_x = np.ravel(transformed_points2_left[:, 0]).reshape(number_imgs, 1)
+pupil_error_left_y = np.ravel(transformed_points2_left[:, 1]).reshape(number_imgs, 1)
 
-# print 'distance: \n', dist, '\n Max:', np.max(dist)
+transformed_points2_right = transformed_points_right[0]
+pupil_error_right_x = np.ravel(transformed_points2_right[:, 0]).reshape(number_imgs, 1)
+pupil_error_right_y = np.ravel(transformed_points2_right[:, 1]).reshape(number_imgs, 1)
+
+# plot_x = pupil_error_x
+# plot_y = pupil_error_y
+# plot1_x = np.ravel(transformed_points2_left[:, 0]).reshape(number_imgs, 1)
+# plot1_y = np.ravel(transformed_points2_left[:, 1]).reshape(number_imgs, 1)
+# plot2_x = np.ravel(transformed_points2_right[:, 0]).reshape(number_imgs, 1)
+# plot2_y = np.ravel(transformed_points2_right[:, 1]).reshape(number_imgs, 1)
+# plt.figure(num=None, figsize=(6.5, 6), dpi=140, facecolor='w', edgecolor='k') #figsize=(7, 7),
+# plt.grid(color='0.5')
+# plt.axhline(0, color='k')
+# plt.axvline(0, color='k')
+#
+# # plt.plot(plot_x,plot_y, 'kx')
+# plt.plot(plot1_x, plot1_y, 'bx')
+# plt.plot(plot2_x, plot2_y, 'rx')
+# # plt.axis([-0.4, 0.4, -0.4, 0.4])
+# plt.subplots_adjust(left=0.14, right=0.86)
+# plt.xlabel('$\Delta x$ (Pixel)')
+# plt.ylabel('$\Delta y$ (Pixel)')
+#
+# for i in range(1, number_imgs+1):
+#     plt.annotate(i, xy=(plot1_x[i - 1], plot1_y[i - 1]), xytext = (-0.2, 0.2), textcoords = 'offset points', ha = 'right', va = 'bottom', color='0.4')
+# # plt.savefig('foo.pdf', figsize=(7, 7), bbox_inches='tight')
+# plt.show()
+
+# initial guesses
+
+optimized_args = calibration.calibrate_3D(HomographyMat_left, HomographyMat_right, norm_factor_left, norm_factor_right, img_resolution_factor)
+# distance_eyes = optimized_args[0]
+# distance_eye_monitor = optimized_args[1]
+# calculate fixation depth
+for i in range(number_imgs):
+    # monitor centered coordinates in cm
+    x_left_cm = (transformed_points2_left[i, 0] - monitor_res_x / 2) * pixelpitch_monitor
+    x_right_cm = (transformed_points2_right[i, 0] - monitor_res_x / 2) * pixelpitch_monitor
+    y_left_cm = (transformed_points2_left[i, 1] - monitor_res_y / 2) * pixelpitch_monitor
+    y_right_cm = (transformed_points2_right[i, 1] - monitor_res_y / 2) * pixelpitch_monitor
+
+    if x_left_cm - x_right_cm + distance_eyes > 0:
+        z_3D = distance_eyes * distance_eye_monitor / (x_left_cm - x_right_cm + distance_eyes)
+
+    else:
+        z_3D = np.inf
+
+    x_3D_left =     (z_3D * (x_left_cm + (distance_eyes / 2)) / distance_eye_monitor) - (distance_eyes / 2)
+    x_3D_right =    (z_3D * (x_right_cm - (distance_eyes / 2)) / distance_eye_monitor) + (distance_eyes / 2)
+    x_3D = (x_3D_left + x_3D_right) / 2
+    x_3D_2 = z_3D * (x_left_cm + x_right_cm) / (2 * distance_eye_monitor)
+    y_3D_left =     z_3D * y_left_cm / distance_eye_monitor
+    y_3D_right =    z_3D * y_right_cm / distance_eye_monitor
+    y_3D = (y_3D_left + y_3D_right) / 2
+
+    print 'Image number:', i+1
+    print 'Pixel Left Eye:\t\t', transformed_points2_left[i, 0], 'Px\t', transformed_points2_left[i, 1], 'Px'
+    print 'Pixel Right Eye:\t', transformed_points2_right[i, 0], 'Px\t', transformed_points2_left[i, 1], 'Px'
+    print 'x:', round(x_3D, 3), 'cm'
+    print 'y:', round(y_3D, 3), 'cm'
+    print 'z:', round(z_3D, 3), 'cm', '\n'
+
 
 elapsed = (time.clock() - start)
-print 'elapsed time:', elapsed
+# print 'elapsed time:', elapsed
 
 cv2.waitKey(0)
 cv2.destroyAllWindows()
+
+
