@@ -12,7 +12,7 @@ import time
 # import functions
 import pupil_detection_optimal as pupil_detection
 import rough_estimation
-import evaluation,evaluation_angle,evaluation_corrected
+
 from scipy.optimize import fmin
 
 from scipy.optimize import minimize
@@ -40,7 +40,8 @@ def calibrate(img_resolution_factor):
     sensor_height = 0.308864580969  # cm
     sensor_height_px = 2160         # px
     sensor_diagonal = 0.63          # cm
-
+    monitor_res_x = 1920.0
+    monitor_res_y = 1080.0
 
     pupilcenter_list_left = []
     pupilcenter_list_right = []
@@ -60,7 +61,13 @@ def calibrate(img_resolution_factor):
 
     # define depth calibration points
     calib_3D = np.float32([[0, 0, 10.870], [0, 0, 50], [0, 0, 100], [0, 0, 150], [0, 0, 200], [0, 0, 250], [0, 0, 300], [0, 0, 500], [0, 0, 1000], [0, 0, 5000]])
-
+    calib_2000_3D = np.float32([[0, 0, 10.87], [0, 0, 50], [0, 0, 100], [0, 0, 150], [0, 0, 200], [0, 0, 250],
+                               [0, 0, 300], [0, 0, 350], [0, 0, 400], [0, 0, 450], [0, 0, 500], [0, 0, 550],
+                               [0, 0, 600], [0, 0, 650], [0, 0, 700], [0, 0, 750], [0, 0, 800], [0, 0, 850],
+                               [0, 0, 900], [0, 0, 950], [0, 0, 1000], [0, 0, 1050], [0, 0, 1100], [0, 0, 1150],
+                               [0, 0, 1200], [0, 0, 1250], [0, 0, 1300], [0, 0, 1350], [0, 0, 1400], [0, 0, 1450],
+                               [0, 0, 1500], [0, 0, 1550], [0, 0, 1600], [0, 0, 1650], [0, 0, 1700], [0, 0, 1750],
+                               [0, 0, 1800], [0, 0, 1850], [0, 0, 1900], [0, 0, 1950], [0, 0, 2000]])
     # define calibration points for depth = 200 cm
     calib_points_200 = np.float32([[-55.68, 31.32, 200], [-27.84, 31.32, 200], [0, 31.32, 200], [27.84, 31.32, 200],
         [55.68, 31.32, 200], [55.68, 15.66, 200], [27.84, 15.66, 200], [0, 15.66, 200],
@@ -85,27 +92,33 @@ def calibrate(img_resolution_factor):
         [67.2, -78.3, 500], [134.4, -78.3, 500]])
 
     # load left eye 3d calibration images for depth = 200 cm
-    path = r'../data/tests/3d/calibration/200cm/left'
+    path = r'../data/tests/3d/f14/200cm/left'
+    # path = r'../data/tests/3d/real/200cm/left'
     imglist_200cm_left = load_imgs(path)
 
     # load right eye 3d calibration images for depth = 200 cm
-    path = r'../data/tests/3d/calibration/200cm/right'
+    path = r'../data/tests/3d/f14/200cm/right'
+    # path = r'../data/tests/3d/real/200cm/right'
     imglist_200cm_right = load_imgs(path)
 
     # load left eye 3d calibration images for depth = 50 cm
-    path = r'../data/tests/3d/calibration/50cm/left'
+    path = r'../data/tests/3d/f14/50cm/left'
+    # path = r'../data/tests/3d/real/50cm/left'
     imglist_50cm_left = load_imgs(path)
 
     # load right eye 3d calibration images for depth = 50 cm
-    path = r'../data/tests/3d/calibration/50cm/right'
+    path = r'../data/tests/3d/f14/50cm/right'
+    # path = r'../data/tests/3d/real/50cm/right'
     imglist_50cm_right = load_imgs(path)
 
     # load left eye 3d calibration images for depth = 500 cm
-    path = r'../data/tests/3d/calibration/500cm/left'
+    path = r'../data/tests/3d/f14/500cm/left'
+    # path = r'../data/tests/3d/real/500cm/left'
     imglist_500cm_left = load_imgs(path)
 
     # load right eye 3d calibration images for depth = 500 cm
-    path = r'../data/tests/3d/calibration/500cm/right'
+    path = r'../data/tests/3d/f14/500cm/right'
+    # path = r'../data/tests/3d/real/500cm/right'
     imglist_500cm_right = load_imgs(path)
 
     number_imgs = len(imglist_200cm_left)
@@ -116,6 +129,7 @@ def calibrate(img_resolution_factor):
 
     optimized_args_left = fmin(optimize_radialfactor, x0=1.0, xtol=1e-8, args=(pupils_centered_200_left, calib_points_px_200))
     norm_factor_left = optimized_args_left[0]
+
     # distance_eye_monitor = optimized_args[1]
     # pixelpitch_monitor = optimized_args[2]
 
@@ -129,10 +143,10 @@ def calibrate(img_resolution_factor):
 
         corrected_coords_left.append(coord * radial_correction_factor)   # 1.05124209
 
-    pupils_rad_corr_200_left = np.ravel(corrected_coords_left).reshape(25, 2)
+    pupils_rad_corr_200_left = np.ravel(corrected_coords_left).reshape(number_imgs, 2)
     Homography_left, mask = cv2.findHomography(np.float32(pupils_rad_corr_200_left), calib_points_px_200)#, cv2.LMEDS)             # find perspective transformation Matrix HomographyMat
 
-    sensor_coords_H_left = np.ravel(np.float32(pupils_rad_corr_200_left)).reshape(-1, 25, 2)
+    sensor_coords_H_left = np.ravel(np.float32(pupils_rad_corr_200_left)).reshape(-1, number_imgs, 2)
 
     if Homography_left is not None:
         transformed_points_left = cv2.perspectiveTransform(sensor_coords_H_left, Homography_left)
@@ -143,11 +157,11 @@ def calibrate(img_resolution_factor):
     pupils_calibrated_200_left = transformed_points_left[0]
 
     # print calib_points_px_200, '\n', dst_Array
-    error = np.matrix(np.subtract(calib_points_px_200, pupils_calibrated_200_left))            # difference between x,y coords of source points and calibrated points
+    error = np.matrix(np.subtract(pupils_calibrated_200_left, calib_points_px_200))            # difference between x,y coords of source points and calibrated points
 
     dist = np.sqrt(np.square(error[:, 0]) + np.square(error[:, 1]))     # euclidian distance between calibration points and mapped points
     max_error = np.max(dist)
-    mean_error = np.sum(dist) / 25.0
+    mean_error = np.sum(dist) / number_imgs
     print 'Calibration Mean Error Left:', mean_error, 'Max Error:', max_error
 
 
@@ -161,7 +175,7 @@ def calibrate(img_resolution_factor):
 
     for coord in pupils_centered_200_right:
 
-        alpha = np.arctan(np.sqrt(np.square(coord[0] * norm_factor_right) + np.square(coord[1] * norm_factor_right)))# / 1000.0)#(distance_eye_monitor / pixelpitch_monitor))
+        alpha = np.arctan(np.sqrt(np.power(coord[0] * norm_factor_right, 2) + np.power(coord[1] * norm_factor_right, 2)))# / 1000.0)#(distance_eye_monitor / pixelpitch_monitor))
         if alpha != 0:      # avoid division by 0
             radial_correction_factor = np.tan(alpha) / np.sin(alpha)
         else:
@@ -169,10 +183,10 @@ def calibrate(img_resolution_factor):
 
         corrected_coords_right.append(coord * radial_correction_factor)   # 1.05124209
 
-    pupils_rad_corr_200_right = np.ravel(corrected_coords_right).reshape(25, 2)
+    pupils_rad_corr_200_right = np.ravel(corrected_coords_right).reshape(number_imgs, 2)
     Homography_right, mask = cv2.findHomography(np.float32(pupils_rad_corr_200_right), calib_points_px_200)#, cv2.LMEDS)             # find perspective transformation Matrix HomographyMat
 
-    sensor_coords_H_right = np.ravel(np.float32(pupils_rad_corr_200_right)).reshape(-1, 25, 2)
+    sensor_coords_H_right = np.ravel(np.float32(pupils_rad_corr_200_right)).reshape(-1, number_imgs, 2)
 
     if Homography_right is not None:
         transformed_points_right = cv2.perspectiveTransform(sensor_coords_H_right, Homography_right)
@@ -183,11 +197,11 @@ def calibrate(img_resolution_factor):
     pupils_calibrated_200_right = transformed_points_right[0]
 
     # print calib_points_px_200, '\n', dst_Array
-    error = np.matrix(np.subtract(calib_points_px_200, pupils_calibrated_200_right))            # difference between x,y coords of source points and calibrated points
+    error = np.matrix(np.subtract(pupils_calibrated_200_right, calib_points_px_200))            # difference between x,y coords of source points and calibrated points
 
     dist = np.sqrt(np.square(error[:, 0]) + np.square(error[:, 1]))     # euclidian distance between calibration points and mapped points
     max_error = np.max(dist)
-    mean_error = np.sum(dist) / 25.0
+    mean_error = np.sum(dist) / number_imgs
     print 'Calibration Mean Error Right:', mean_error, 'Max Error:', max_error
 
 
@@ -211,7 +225,7 @@ def calibrate(img_resolution_factor):
     # correct right pupil coordinates
     pupils_calibrated_500_right = correct_pupil_points(pupil_centered_500_right, norm_factor_right, Homography_right)
 
-    x0 = np.float32([[distance_eyes], [distance_eye_monitor]])
+    x0 = np.float32([[distance_eyes], [distance_eye_monitor], [pixelpitch_monitor],[monitor_res_x], [monitor_res_y]])
     optimized_args = fmin(optimize_3D, x0, xtol=1e-8, args=(pupils_calibrated_50_left, pupils_calibrated_50_right,
                                                             pupils_calibrated_200_left, pupils_calibrated_200_right,
                                                             pupils_calibrated_500_left, pupils_calibrated_500_right,
@@ -219,135 +233,12 @@ def calibrate(img_resolution_factor):
 
     distance_eyes = optimized_args[0]
     distance_eye_monitor = optimized_args[1]
+    pixelpitch_monitor = optimized_args[2]
+    monitor_res_x = optimized_args[3]
+    monitor_res_y = optimized_args[4]
 
-
-
-    # x_3D_50_list = []
-    # y_3D_50_list = []
-    # z_3D_50_list = []
-    # x_3D_200_list = []
-    # y_3D_200_list = []
-    # z_3D_200_list = []
-    # x_3D_500_list = []
-    # y_3D_500_list = []
-    # z_3D_500_list = []
-    # monitor_res_x = 1920.0
-    # monitor_res_y = 1080.0
-    # pixelpitch_monitor = 0.058
-    #
-    #
-    # coords_50_left = pupils_calibrated_50_left
-    # coords_50_right = pupils_calibrated_50_right
-    # coords_200_left = pupils_calibrated_200_left
-    # coords_200_right = pupils_calibrated_200_right
-    # coords_500_left = pupils_calibrated_500_left
-    # coords_500_right = pupils_calibrated_500_right
-    # calib_50 = calib_points_50
-    # calib_200 = calib_points_200
-    # calib_500 = calib_points_500
-    #
-    #
-    # length = len(coords_200_left)
-    #
-    # #50
-    # for i in range(length):
-    #     x_left_cm = (coords_50_left[i, 0] - monitor_res_x / 2.0) * pixelpitch_monitor
-    #     x_right_cm = (coords_50_right[i, 0] - monitor_res_x / 2.0) * pixelpitch_monitor
-    #     y_left_cm = (coords_50_left[i, 1] - monitor_res_y / 2.0) * pixelpitch_monitor * -1
-    #     y_right_cm = (coords_50_right[i, 1] - monitor_res_y / 2.0) * pixelpitch_monitor * -1
-    #
-    #     z_3D = distance_eyes * distance_eye_monitor / (x_left_cm - x_right_cm + distance_eyes)
-    #     z_3D_50_list.append(z_3D)
-    #
-    #     x_3D = z_3D * (x_left_cm + x_right_cm) / (2 * distance_eye_monitor)
-    #     x_3D_50_list.append(x_3D)
-    #
-    #     y_3D = z_3D * (y_left_cm + y_right_cm) / (2 * distance_eye_monitor)
-    #     y_3D_50_list.append(y_3D)
-    #
-    # x_3D_50_mat = np.ravel(x_3D_50_list).reshape(length, 1)
-    # y_3D_50_mat = np.ravel(y_3D_50_list).reshape(length, 1)
-    # z_3D_50_mat = np.ravel(z_3D_50_list).reshape(length, 1)
-    #
-    # points_50_3D = np.hstack((x_3D_50_mat, y_3D_50_mat, z_3D_50_mat))
-    # error_50_3D = np.sqrt(np.sum(np.square(np.matrix(np.subtract(calib_50, points_50_3D))), axis=1))
-    #
-    # #200
-    # for i in range(length):
-    #     x_left_cm = (coords_200_left[i, 0] - monitor_res_x / 2.0) * pixelpitch_monitor
-    #     x_right_cm = (coords_200_right[i, 0] - monitor_res_x / 2.0) * pixelpitch_monitor
-    #     y_left_cm = (coords_200_left[i, 1] - monitor_res_y / 2.0) * pixelpitch_monitor * -1
-    #     y_right_cm = (coords_200_right[i, 1] - monitor_res_y / 2.0) * pixelpitch_monitor * -1
-    #
-    #     z_3D = distance_eyes * distance_eye_monitor / (x_left_cm - x_right_cm + distance_eyes)
-    #     z_3D_200_list.append(z_3D)
-    #
-    #     x_3D = z_3D * (x_left_cm + x_right_cm) / (2 * distance_eye_monitor)
-    #     x_3D_200_list.append(x_3D)
-    #
-    #     y_3D = z_3D * (y_left_cm + y_right_cm) / (2 * distance_eye_monitor)
-    #     y_3D_200_list.append(y_3D)
-    #
-    # x_3D_200_mat = np.ravel(x_3D_200_list).reshape(length, 1)
-    # y_3D_200_mat = np.ravel(y_3D_200_list).reshape(length, 1)
-    # z_3D_200_mat = np.ravel(z_3D_200_list).reshape(length, 1)
-    #
-    # points_200_3D = np.hstack((x_3D_200_mat, y_3D_200_mat, z_3D_200_mat))
-    # error_200_3D = np.sqrt(np.sum(np.square(np.matrix(np.subtract(calib_200, points_200_3D))), axis=1))
-    #
-    # #500
-    # for i in range(length):
-    #     x_left_cm = (coords_500_left[i, 0] - monitor_res_x / 2.0) * pixelpitch_monitor
-    #     x_right_cm = (coords_500_right[i, 0] - monitor_res_x / 2.0) * pixelpitch_monitor
-    #     y_left_cm = (coords_500_left[i, 1] - monitor_res_y / 2.0) * pixelpitch_monitor * -1
-    #     y_right_cm = (coords_500_right[i, 1] - monitor_res_y / 2.0) * pixelpitch_monitor * -1
-    #
-    #     z_3D = distance_eyes * distance_eye_monitor / (x_left_cm - x_right_cm + distance_eyes)
-    #     z_3D_500_list.append(z_3D)
-    #
-    #     x_3D = z_3D * (x_left_cm + x_right_cm) / (2 * distance_eye_monitor)
-    #     x_3D_500_list.append(x_3D)
-    #
-    #     y_3D = z_3D * (y_left_cm + y_right_cm) / (2 * distance_eye_monitor)
-    #     y_3D_500_list.append(y_3D)
-    #
-    # x_3D_500_mat = np.ravel(x_3D_500_list).reshape(length, 1)
-    # y_3D_500_mat = np.ravel(y_3D_500_list).reshape(length, 1)
-    # z_3D_500_mat = np.ravel(z_3D_500_list).reshape(length, 1)
-    #
-    # points_500_3D = np.hstack((x_3D_500_mat, y_3D_500_mat, z_3D_500_mat))
-    # error_500_3D = np.sqrt(np.sum(np.square(np.matrix(np.subtract(calib_500, points_500_3D))), axis=1))
-    #
-    # # error_sum_sq = np.sum(np.square(error_50_3D)) + np.sum(np.square(error_200_3D)) + np.sum(np.square(error_500_3D))
-    # error_sum_sq = np.sum(np.square(error_200_3D))
-
-    # pupil_error = np.subtract(calib_200, points_200_3D)   # choose left or right eye coords     np.multiply(pupil_measured, image_resolution_divider)
-    # # print pupil_measured
-    # pupil_error_x = np.ravel(pupil_error[:, 0]).reshape(length, 1)
-    # pupil_error_y = np.ravel(pupil_error[:, 1]).reshape(length, 1)
-    #
-    # plot_x = pupil_error_x
-    # plot_y = pupil_error_y
-    #
-    # plt.figure(num=None, figsize=(6.5, 6), dpi=140, facecolor='w', edgecolor='k') #figsize=(7, 7),
-    # plt.grid(color='0.5')
-    # plt.axhline(0, color='k')
-    # plt.axvline(0, color='k')
-    #
-    # plt.plot(plot_x,plot_y, 'kx')
-    # # plt.plot(plot1_x,plot1_y, 'bx')
-    # # plt.plot(plot2_x,plot2_y, 'rx')
-    # # plt.axis([-0.4, 0.4, -0.4, 0.4])
-    # plt.subplots_adjust(left=0.14, right=0.86)
-    # plt.xlabel('$\Delta \mathrm{x\ (Pixel)}$')
-    # plt.ylabel('$\Delta \mathrm{y\ (Pixel)}$')
-    #
-    # for i in range(1,26):
-    #     plt.annotate(i, xy=(plot_x[i - 1], plot_y[i - 1]), xytext = (-0.2, 0.2), textcoords = 'offset points', ha = 'right', va = 'bottom', color='0.4')
-    # # plt.savefig('foo.pdf', figsize=(7, 7), bbox_inches='tight')
-    # plt.show()
-    print distance_eyes, distance_eye_monitor
-    return norm_factor_left, norm_factor_left, Homography_left, Homography_right, distance_eyes, distance_eye_monitor
+    print distance_eyes, distance_eye_monitor, pixelpitch_monitor
+    return norm_factor_left, norm_factor_left, Homography_left, Homography_right, distance_eyes, distance_eye_monitor, pixelpitch_monitor, monitor_res_x, monitor_res_y
 
 
 # modelfunktion for 3D optimization
@@ -361,9 +252,9 @@ def optimize_3D(x, *args):
     x_3D_500_list = []
     y_3D_500_list = []
     z_3D_500_list = []
-    monitor_res_x = 1920.0
-    monitor_res_y = 1080.0
-    pixelpitch_monitor = 0.058
+    # monitor_res_x = 1920.0
+    # monitor_res_y = 1080.0
+    # pixelpitch_monitor = 0.058
 
 
     coords_50_left = args[0]
@@ -378,7 +269,9 @@ def optimize_3D(x, *args):
 
     distance_eyes = x[0]
     distance_eye_monitor = x[1]
-
+    pixelpitch_monitor = x[2]
+    monitor_res_x = x[3]
+    monitor_res_y = x[4]
     length = len(coords_200_left)
 
     #50
@@ -402,7 +295,7 @@ def optimize_3D(x, *args):
     z_3D_50_mat = np.ravel(z_3D_50_list).reshape(length, 1)
 
     points_50_3D = np.hstack((x_3D_50_mat, y_3D_50_mat, z_3D_50_mat))
-    error_50_3D = np.sqrt(np.sum(np.square(np.matrix(np.subtract(calib_50, points_50_3D))), axis=1))
+    error_50_3D = np.sqrt(np.sum(np.square(np.matrix(np.subtract(points_50_3D, calib_50))), axis=1))
 
     #200
     for i in range(length):
@@ -425,7 +318,7 @@ def optimize_3D(x, *args):
     z_3D_200_mat = np.ravel(z_3D_200_list).reshape(length, 1)
 
     points_200_3D = np.hstack((x_3D_200_mat, y_3D_200_mat, z_3D_200_mat))
-    error_200_3D = np.sqrt(np.sum(np.square(np.matrix(np.subtract(calib_200, points_200_3D))), axis=1))
+    error_200_3D = np.sqrt(np.sum(np.square(np.matrix(np.subtract(points_200_3D, calib_200))), axis=1))
 
     #500
     for i in range(length):
@@ -448,7 +341,7 @@ def optimize_3D(x, *args):
     z_3D_500_mat = np.ravel(z_3D_500_list).reshape(length, 1)
 
     points_500_3D = np.hstack((x_3D_500_mat, y_3D_500_mat, z_3D_500_mat))
-    error_500_3D = np.sqrt(np.sum(np.square(np.matrix(np.subtract(calib_500, points_500_3D))), axis=1))
+    error_500_3D = np.sqrt(np.sum(np.square(np.matrix(np.subtract(points_500_3D, calib_500))), axis=1))
 
     error_sum_sq = np.sum(np.square(error_50_3D)) + np.sum(np.square(error_200_3D)) + np.sum(np.square(error_500_3D))
 
@@ -485,10 +378,10 @@ def optimize_3D(x, *args):
 # modelfunktion for radial error optimization
 def optimize_radialfactor(x, *args):
     pupil_centered = args[0]
-    calib_points_px_200 = args[1]
+    calib_points_px = args[1]
     norm_factor = x[0]
-    # distance_eye_monitor = x[1]
-    # pixelpitch_monitor = x[2]
+
+    number_imgs = len(pupil_centered)
     corrected_coords = []
     for coord in pupil_centered:
 
@@ -499,12 +392,12 @@ def optimize_radialfactor(x, *args):
             radial_correction_factor = 1.0
         corrected_coords.append(coord * radial_correction_factor) # 1.05124209
 
-    pupils_rad_corrected = np.ravel(corrected_coords).reshape(25, 2)
+    pupils_rad_corrected = np.ravel(corrected_coords).reshape(number_imgs, 2)
 
 
-    HomographyMat, mask = cv2.findHomography(np.float32(pupils_rad_corrected), calib_points_px_200)
+    HomographyMat, mask = cv2.findHomography(np.float32(pupils_rad_corrected), calib_points_px)
 
-    sensor_coords_corr = np.ravel(np.float32(pupils_rad_corrected)).reshape(-1, 25, 2)
+    sensor_coords_corr = np.ravel(np.float32(pupils_rad_corrected)).reshape(-1, number_imgs, 2)
 
     if HomographyMat is not None:
         transformed_points_right = cv2.perspectiveTransform(sensor_coords_corr, HomographyMat)
@@ -515,10 +408,10 @@ def optimize_radialfactor(x, *args):
 
 
     # print calib_points_px_200, '\n', dst_Array
-    error = np.matrix(np.subtract(calib_points_px_200, transformed_points_right))
+    error = np.matrix(np.subtract(transformed_points_right, calib_points_px))
     dist = np.sqrt(np.square(error[:, 0]) + np.square(error[:, 1]))
     dist2 = np.sum(np.square(dist))
-    mean_error = np.sum(dist) / 25.0
+    mean_error = np.sum(dist) / number_imgs
     return dist2
 
 
@@ -531,6 +424,7 @@ def detect_pupil_centers(imglist, img_resolution_factor):
     height /= img_resolution_factor
     width /= img_resolution_factor
 
+    count = 1
     for left_img in imglist:
 
         # select pupil detection method
@@ -545,10 +439,11 @@ def detect_pupil_centers(imglist, img_resolution_factor):
 
 
         if center is not None:
-            # print 'processing left image:', count, '/ 25'
+            # print 'processing left image:', count, '/ number_imgs'
 
             pupilcenter_list.append(center)
-            # print center
+            print 'processing image:', count, '/ 25'
+            count += 1
         else:
             print('No Pupils Detected!')
 
@@ -564,6 +459,7 @@ def detect_pupil_centers(imglist, img_resolution_factor):
 
 def correct_pupil_points(pupil_coords_original, norm_factor, Homography):
 
+    length = len(pupil_coords_original)
     corrected_coords = []
 
     for coord in pupil_coords_original:
@@ -576,8 +472,8 @@ def correct_pupil_points(pupil_coords_original, norm_factor, Homography):
 
         corrected_coords.append(coord * radial_correction_factor)   # 1.05124209
 
-    pupils_radial_corrected = np.ravel(corrected_coords).reshape(25, 2)
-    sensor_coords_H = np.ravel(np.float32(pupils_radial_corrected)).reshape(-1, 25, 2)
+    pupils_radial_corrected = np.ravel(corrected_coords).reshape(length, 2)
+    sensor_coords_H = np.ravel(np.float32(pupils_radial_corrected)).reshape(-1, length, 2)
 
     if Homography is not None:
         transformed_points_left = cv2.perspectiveTransform(sensor_coords_H, Homography)
@@ -594,7 +490,7 @@ def load_imgs(filename):
     # create filelist
     for root, dirs, imgfiles in os.walk(filename):
         for imgfile in imgfiles:
-            if imgfile.endswith('.png'):
+            if imgfile.endswith('.jpg') or imgfile.endswith('.png'):
                 filelist.append(root+'/'+imgfile)
 
     for imagefile in filelist:
