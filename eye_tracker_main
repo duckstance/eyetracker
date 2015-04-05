@@ -37,32 +37,35 @@ corrected_coords_y = []
 # Mat_centers = np.zeros((5, 3), np.float32)      # Zeilen, Spalten
 
 img_resolution_factor = 1.0
-pixelpitch_sensor = 0.00015875  # cm/px
+
+pixelpitch_sensor = 0.00015875 * img_resolution_factor  # cm/px
 pixelpitch_monitor = 0.058      # cm/px
 monitor_res_x = 1920.0            # px
 monitor_res_y = 1080.0            # px
 distance_eye_monitor = 200.0    # cm
 distance_eyes = 6.4             # cm
-
+focal_length = 5.4545 #1.4              # cm
+distance_eye_camera = 4.0
+eye_radius = 1.0
 
 # Maya Kamera data
-focal_lenght = 3.8              # cm
 sensor_width = 0.549092588388   # cm
-sensor_width_px = 3840.0          # px
+sensor_width_px = 3840          # px
 sensor_height = 0.308864580969  # cm
-sensor_height_px = 2160.0         # px
+sensor_height_px = 2160         # px
 sensor_diagonal = 0.63          # cm
+
 
 # r'../data/tests/3D/calibration/500cm/left'
 # path_left = r'../data/tests/3d/f14/500cm/left'
 # r'../data/tests/3d/iris/200cm/left'
 # load left eye images
 
-path_left = r'../data/tests/3D/f14/200cm/left'
+path_left = r'../data/tests/3D/real/500cm/left'
 imglist_left = calibration.load_imgs(path_left)
 
 # load right eye images
-path_right = r'../data/tests/3D/f14/200cm/right'
+path_right = r'../data/tests/3D/real/500cm/right'
 imglist_right = calibration.load_imgs(path_right)
 
 number_imgs = len(imglist_left)
@@ -71,35 +74,38 @@ height, width = imglist_left[0].shape       # get image size
 height /= img_resolution_factor
 width /= img_resolution_factor
 
+
+
 # calibration
-# norm_factor_left, norm_factor_right, Homography_left, Homography_right, distance_eyes, distance_eye_monitor, pixelpitch_monitor, monitor_res_x, monitor_res_y = calibration.calibrate(img_resolution_factor)
+Homography_left, Homography_right, distance_eyes, distance_eye_monitor, eye_radius_left, distance_eye_camera_left, \
+    eye_radius_right, distance_eye_camera_right = calibration.calibrate(img_resolution_factor, eye_radius,
+    distance_eyes, distance_eye_camera, distance_eye_monitor, pixelpitch_sensor, focal_length)
 
 
 # # Saving
 # with open('../data/tests/3d/f14/calib.pickle', 'w') as file:
 #     pickle.dump([norm_factor_left, norm_factor_right, Homography_left, Homography_right, distance_eyes, distance_eye_monitor, pixelpitch_monitor, monitor_res_x, monitor_res_y], file)
 
-# Loading
-with open('../data/tests/3d/f14/calib.pickle') as file:
-    norm_factor_left, norm_factor_right, Homography_left, Homography_right, distance_eyes, distance_eye_monitor, pixelpitch_monitor, monitor_res_x, monitor_res_y = pickle.load(file)
+# # Loading
+# with open('../data/tests/3d/f14/calib.pickle') as file:
+#     norm_factor_left, norm_factor_right, Homography_left, Homography_right, distance_eyes, distance_eye_monitor, pixelpitch_monitor, monitor_res_x, monitor_res_y = pickle.load(file)
 
 
-pixelpitch_monitor = 0.058  # cm/px
-monitor_res_x = 1920.0            # px
-monitor_res_y = 1080.0            # px
+
 # detect pupil center in left eye images
 pupil_centered_left = calibration.detect_pupil_centers(imglist_left, img_resolution_factor)
-norm_factor_left = -0.00041
-norm_factor_right = -0.00041
+# norm_factor_left = -0.00041
+# norm_factor_right = -0.00041
 
 # correct left pupil coordinates
-transformed_points_left = calibration.correct_pupil_points(pupil_centered_left, norm_factor_left, Homography_left)
+transformed_points_left = calibration.correct_pupil_points(pupil_centered_left, Homography_left, eye_radius_left, pixelpitch_sensor, distance_eye_camera_left, focal_length)
+
 
 # detect pupil center in right eye images
 pupil_centered_right = calibration.detect_pupil_centers(imglist_right, img_resolution_factor)
 
 # correct right pupil coordinates
-transformed_points_right = calibration.correct_pupil_points(pupil_centered_right, norm_factor_right, Homography_right)
+transformed_points_right = calibration.correct_pupil_points(pupil_centered_right, Homography_right, eye_radius_right, pixelpitch_sensor, distance_eye_camera_right, focal_length)
 
 ## calculate distance
 # distance = evaluation.distance_calc(transformed_points_left)
@@ -206,20 +212,22 @@ z_3D_mat = np.ravel(z_3D_list).reshape(number_imgs, 1)
 
 points_3D = np.hstack((x_3D_mat, y_3D_mat, z_3D_mat))
 
-error_3D = np.subtract(points_3D, calib_points_200)
+error_3D = np.subtract(points_3D, calib_points_500)
 
 error_3D_x = np.ravel(error_3D[:, 0]).reshape(number_imgs, 1)
 error_3D_y = np.ravel(error_3D[:, 1]).reshape(number_imgs, 1)
 error_3D_z = np.ravel(error_3D[:, 2]).reshape(number_imgs, 1)
 
-# Euclidean distance error
-error_3D_euclid = np.sqrt(np.sum(np.square(np.subtract(points_3D, calib_points_200)), axis=1))
+# Euclidean distance error!
+error_3D_euclid = np.sqrt(np.sum(np.square(error_3D), axis=1))
 
 error_3D_x_mean = np.sum(np.absolute(error_3D_x)) / number_imgs
 error_3D_x_min = np.min(np.absolute(error_3D_x))
 error_3D_x_max = np.max(np.absolute(error_3D_x))
 error_3D_x_std = np.std(np.absolute(error_3D_x))
 error_3D_x_median = np.median(np.absolute(error_3D_x))
+
+print 'Guessed Parameter:', 'Eye distance:', distance_eyes, 'Eye-Monitor-Distance:', distance_eye_monitor, 'Eye-Pupil-Radius left:', eye_radius_left, 'Eye-Camera left:', distance_eye_camera_left
 
 print 'Error X:'
 print 'Mean Error:', '\t', error_3D_x_mean
@@ -286,12 +294,12 @@ plot_y = error_3D_y
 plot_z = error_3D_z
 
 
-fig = plt.figure(num=None, figsize=(7, 6), dpi=110, facecolor='w', edgecolor='k')
+fig = plt.figure(num=None, figsize=(7, 6), dpi=120, facecolor='w', edgecolor='k')
 ax = fig.add_subplot(111, projection='3d')
 
-ax.set_xlabel('$\mathrm{\Delta X\ (cm)}$')
-ax.set_ylabel('$\mathrm{\Delta Z\ (cm)}$')
-ax.set_zlabel('$\mathrm{\Delta Y\ (cm)}$')
+ax.set_xlabel('$\mathrm{\Delta x\ (cm)}$')
+ax.set_ylabel('$\mathrm{\Delta z\ (cm)}$')
+ax.set_zlabel('$\mathrm{\Delta y\ (cm)}$')
 
 max_range = np.array([np.max(np.absolute(plot_x)), np.max(np.absolute(plot_y)), np.max(np.absolute(plot_z))]).max()
 # max_range = np.array([np.max(np.absolute(error_3D_500cm_x)), np.max(np.absolute(error_3D_500cm_y)), np.max(np.absolute(error_3D_500cm_z))]).max()
@@ -300,29 +308,29 @@ mean_x = plot_x.mean()
 mean_y = plot_y.mean()
 mean_z = plot_z.mean()
 
-# ax.set_xlim(mean_x - max_range, mean_x + max_range)
-# ax.set_ylim(mean_y - max_range, mean_y + max_range)
-# ax.set_zlim(mean_z - max_range, mean_z + max_range)
-ax.set_xlim(-5, 5)
-ax.set_ylim(-5, 5)
-ax.set_zlim(-5, 5)
+ax.set_xlim(mean_x - max_range, mean_x + max_range)
+ax.set_ylim(mean_y - max_range, mean_y + max_range)
+ax.set_zlim(mean_z - max_range, mean_z + max_range)
+# ax.set_xlim(-5, 5)
+# ax.set_ylim(-5, 5)
+# ax.set_zlim(-5, 5)
 
 ax.scatter(plot_x, plot_y, plot_z, zdir=u'y', s=20, c=u'r', marker='o', depthshade=False)
 # ax.scatter(error_3D_50cm_x, error_3D_50cm_y, error_3D_50cm_z, zdir=u'y', s=10, color=u'b', marker='.', depthshade=False)
 # ax.scatter(error_3D_200cm_x, error_3D_200cm_y, error_3D_200cm_z, zdir=u'y', s=10, color=u'r', marker='.', depthshade=False)
 # ax.scatter(error_3D_500cm_x, error_3D_500cm_y, error_3D_500cm_z, zdir=u'y', s=10, color=u'g', marker='.', depthshade=False)
 
-cx = np.ones_like(plot_x) * ax.get_xlim()[0]
-cy = np.ones_like(plot_y) * ax.get_ylim()[0]
-cz = np.ones_like(plot_z) * ax.get_zlim()[0] * -1
+cx = np.ones_like(plot_x) * ax.get_xlim()[0] + 0.04 * ax.get_xlim()[0]
+cy = np.ones_like(plot_y) * ax.get_ylim()[0] + 0.04 *ax.get_ylim()[0]
+cz = np.ones_like(plot_z) * ax.get_zlim()[0] * -1 - 0.04 *ax.get_zlim()[0]
 
-ax.scatter(plot_x, cz, plot_y, c=u'k',  marker='o', lw=0, alpha=0.4)
-ax.scatter(plot_x, plot_z, cy, c=u'k', marker='o', lw=0, alpha=0.4)
-ax.scatter(cx, plot_z, plot_y, c=u'k',  marker='o', lw=0, alpha=0.4)
+ax.scatter(plot_x, cz, plot_y, c=u'k',  marker='o', lw=0, alpha=0.3)
+ax.scatter(plot_x, plot_z, cy, c=u'k', marker='o', lw=0, alpha=0.3)
+ax.scatter(cx, plot_z, plot_y, c=u'k',  marker='o', lw=0, alpha=0.3)
 
 
 # for i in range(1, number_imgs+1):
-#     ax.text(plot_x[i - 1]+0.03, plot_z[i - 1]+0.03, plot_y[i - 1]+0.03, "%d" % i, None)
+#     ax.text(plot_x[i - 1]+0.001, plot_z[i - 1]+0.001, plot_y[i - 1]+0.001, "%d" % i, None)
 
 # plt.hot()
 
