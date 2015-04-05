@@ -10,7 +10,7 @@ from scipy.spatial import distance
 import matplotlib.pyplot as plt
 import time
 # import functions
-import pupil_detection_optimal as pupil_detection
+import pupil_detection_real as pupil_detection
 import rough_estimation
 
 from scipy.optimize import fmin
@@ -20,37 +20,18 @@ from scipy.optimize import minimize
 # plt.rc('text', usetex=True)
 
 
-def calibrate(img_resolution_factor):
+def calibrate(img_resolution_factor, eye_radius, distance_eyes, distance_eye_camera, distance_eye_monitor, pixelpitch_sensor, focal_length):
 
     filelist = []
     imglist = []
     cimglist = []
     pupilcenter_list = []
-
-    # Mat_centers = np.zeros((5, 3), np.float32)    # Zeilen, Spalten
-
-    pixelpitch_monitor = 0.058  # cm/px
-    pixelpitch_sensor = 0.00015875
-    distance_eye_monitor = 200.0
-
-    # Maya Kamera data
-    focal_lenght = 3.8              # cm
-    sensor_width = 0.549092588388   # cm
-    sensor_width_px = 3840          # px
-    sensor_height = 0.308864580969  # cm
-    sensor_height_px = 2160         # px
-    sensor_diagonal = 0.63          # cm
-    monitor_res_x = 1920.0
-    monitor_res_y = 1080.0
-
     pupilcenter_list_left = []
     pupilcenter_list_right = []
     corrected_coords_left = []
     corrected_coords_right = []
+    # Mat_centers = np.zeros((5, 3), np.float32)    # Zeilen, Spalten
 
-    distance_eyes = 6.4
-    distance_eye_monitor = 200.0
-    pixelpitch_monitor = 0.058
 
     # define the 25 calibration points in pixel coordinates
     calib_points_px_200 = np.float32([[0, 0],     [480, 0],    [960, 0],    [1440, 0],    [1920, 0],
@@ -91,33 +72,33 @@ def calibrate(img_resolution_factor):
         [-134.4, -39.15, 500], [-134.4, -78.3, 500], [-67.2, -78.3, 500], [0, -78.3, 500],
         [67.2, -78.3, 500], [134.4, -78.3, 500]])
 
-    # load left eye 3d calibration images for depth = 200 cm
-    path = r'../data/tests/3d/f14/200cm/left'
-    # path = r'../data/tests/3d/real/200cm/left'
-    imglist_200cm_left = load_imgs(path)
-
-    # load right eye 3d calibration images for depth = 200 cm
-    path = r'../data/tests/3d/f14/200cm/right'
-    # path = r'../data/tests/3d/real/200cm/right'
-    imglist_200cm_right = load_imgs(path)
-
     # load left eye 3d calibration images for depth = 50 cm
-    path = r'../data/tests/3d/f14/50cm/left'
+    path = r'../data/tests/3d/real/50cm/left'
     # path = r'../data/tests/3d/real/50cm/left'
     imglist_50cm_left = load_imgs(path)
 
     # load right eye 3d calibration images for depth = 50 cm
-    path = r'../data/tests/3d/f14/50cm/right'
+    path = r'../data/tests/3d/real/50cm/right'
     # path = r'../data/tests/3d/real/50cm/right'
     imglist_50cm_right = load_imgs(path)
 
+    # load left eye 3d calibration images for depth = 200 cm
+    path = r'../data/tests/3d/real/200cm/left'
+    # path = r'../data/tests/3d/real/200cm/left'
+    imglist_200cm_left = load_imgs(path)
+
+    # load right eye 3d calibration images for depth = 200 cm
+    path = r'../data/tests/3d/real/200cm/right'
+    # path = r'../data/tests/3d/real/200cm/right'
+    imglist_200cm_right = load_imgs(path)
+
     # load left eye 3d calibration images for depth = 500 cm
-    path = r'../data/tests/3d/f14/500cm/left'
+    path = r'../data/tests/3d/real/500cm/left'
     # path = r'../data/tests/3d/real/500cm/left'
     imglist_500cm_left = load_imgs(path)
 
     # load right eye 3d calibration images for depth = 500 cm
-    path = r'../data/tests/3d/f14/500cm/right'
+    path = r'../data/tests/3d/real/500cm/right'
     # path = r'../data/tests/3d/real/500cm/right'
     imglist_500cm_right = load_imgs(path)
 
@@ -127,17 +108,35 @@ def calibrate(img_resolution_factor):
     # detect pupil centers in left image for depth = 200 cm
     pupils_centered_200_left = detect_pupil_centers(imglist_200cm_left, img_resolution_factor)
 
-    optimized_args_left = fmin(optimize_radialfactor, x0=1.0, xtol=1e-8, args=(pupils_centered_200_left, calib_points_px_200))
-    norm_factor_left = optimized_args_left[0]
+    # initial guesses
+    x0 = np.float32([[eye_radius], [distance_eye_camera]])
+    optimized_args_left = fmin(optimize_radialfactor, x0, xtol=1e-8, args=(pupils_centered_200_left, calib_points_px_200
+                                                                           , pixelpitch_sensor, focal_length))
 
-    # distance_eye_monitor = optimized_args[1]
-    # pixelpitch_monitor = optimized_args[2]
+    eye_radius_left = optimized_args_left[0]
+    distance_eye_camera_left = optimized_args_left[1]
 
     for coord in pupils_centered_200_left:
 
-        alpha = np.arctan(np.sqrt(np.square(coord[0] * norm_factor_left) + np.square(coord[1] * norm_factor_left)))# / 1000.0)#(distance_eye_monitor / pixelpitch_monitor))
-        if alpha != 0:      # avoid division by 0
-            radial_correction_factor = np.tan(alpha) / np.sin(alpha)
+
+        x_s = coord[0] * pixelpitch_sensor
+        y_s = coord[1] * pixelpitch_sensor
+        z_s = distance_eye_camera_left + focal_length
+        z_k = distance_eye_camera_left
+        aux = np.sqrt(eye_radius_left**2*x_s**2 + eye_radius_left**2*y_s**2 + eye_radius_left**2*z_k**2 - 2 *
+                      eye_radius_left**2*z_k*z_s + eye_radius_left**2*z_s**2 - x_s**2*z_k**2 - y_s**2*z_k**2)
+        lamb = -(aux - z_k*z_s + z_k**2)/(x_s**2 + y_s**2 + z_k**2 - 2*z_k*z_s + z_s**2)
+        x_p = lamb * x_s
+        y_p = lamb * y_s
+        z_p = lamb * (z_k - z_s) + z_k
+
+        alpha = np.arccos((lamb * (z_k - z_s) + z_k) / np.sqrt((lamb * x_s)**2 + (lamb * y_s)**2 + (lamb * (z_k - z_s) + z_k)**2))
+        alpha_grad = alpha * 180.0 / np.pi
+        beta = np.arctan(np.sqrt(x_s**2 + y_s**2) / focal_length)
+        beta_grad = beta * 180.0 / np.pi
+        if ((z_k - eye_radius_left) * np.tan(beta)) != 0:      # avoid division by 0
+            radial_correction_factor = eye_radius_left * np.tan(alpha) / ((z_k - eye_radius_left) * np.tan(beta))
+            # radial_correction_factor = np.tan(alpha) / np.sin(alpha)
         else:
             radial_correction_factor = 1.0
 
@@ -147,6 +146,30 @@ def calibrate(img_resolution_factor):
     Homography_left, mask = cv2.findHomography(np.float32(pupils_rad_corr_200_left), calib_points_px_200)#, cv2.LMEDS)             # find perspective transformation Matrix HomographyMat
 
     sensor_coords_H_left = np.ravel(np.float32(pupils_rad_corr_200_left)).reshape(-1, number_imgs, 2)
+
+
+    # plot_x = np.ravel(pupils_rad_corr_200_left[:, 0]).reshape(25, 1)
+    # plot_y = np.ravel(pupils_rad_corr_200_left[:, 1]).reshape(25, 1)
+    #
+    # plt.figure(num=None, figsize=(16, 9), dpi=100, facecolor='w', edgecolor='k') #figsize=(7, 7),
+    # plt.grid(color='0.5')
+    # plt.axhline(0, color='k')
+    # plt.axvline(0, color='k')
+    #
+    # plt.plot(plot_x,plot_y, 'kx')
+    # # plt.plot(plot1_x,plot1_y, 'bx')
+    # # plt.plot(plot2_x,plot2_y, 'rx')
+    # # plt.axis([-0.4, 0.4, -0.4, 0.4])
+    # # plt.subplots_adjust(left=0.14, right=0.86)
+    # plt.xlabel('$\Delta \mathrm{x\ (Pixel)}$')
+    # plt.ylabel('$\Delta \mathrm{y\ (Pixel)}$')
+    #
+    # for i in range(1,26):
+    #     plt.annotate(i, xy=(plot_x[i - 1], plot_y[i - 1]), xytext = (-0.2, 0.2), textcoords = 'offset points', ha = 'right', va = 'bottom', color='0.4')
+    # # plt.savefig('foo.pdf', figsize=(7, 7), bbox_inches='tight')
+    # plt.show()
+
+
 
     if Homography_left is not None:
         transformed_points_left = cv2.perspectiveTransform(sensor_coords_H_left, Homography_left)
@@ -168,16 +191,31 @@ def calibrate(img_resolution_factor):
     # detect pupil centers in right image for depth = 200 cm
     pupils_centered_200_right = detect_pupil_centers(imglist_200cm_right, img_resolution_factor)
 
-    optimized_args_right = fmin(optimize_radialfactor, x0=1.0, xtol=1e-8, args=(pupils_centered_200_right, calib_points_px_200))
-    norm_factor_right = optimized_args_right[0]
-    # distance_eye_monitor = optimized_args[1]
-    # pixelpitch_monitor = optimized_args[2]
+    # initial guesses
+    x0 = np.float32([[eye_radius], [distance_eye_camera]])
+    optimized_args_right = fmin(optimize_radialfactor, x0, xtol=1e-8, args=(pupils_centered_200_right, calib_points_px_200
+                                                                           , pixelpitch_sensor, focal_length))
+
+    eye_radius_right = optimized_args_right[0]
+    distance_eye_camera_right = optimized_args_right[1]
 
     for coord in pupils_centered_200_right:
 
-        alpha = np.arctan(np.sqrt(np.power(coord[0] * norm_factor_right, 2) + np.power(coord[1] * norm_factor_right, 2)))# / 1000.0)#(distance_eye_monitor / pixelpitch_monitor))
-        if alpha != 0:      # avoid division by 0
-            radial_correction_factor = np.tan(alpha) / np.sin(alpha)
+        x_s = coord[0] * pixelpitch_sensor
+        y_s = coord[1] * pixelpitch_sensor
+        z_s = distance_eye_camera_right + focal_length
+        z_k = distance_eye_camera_right
+        aux = np.sqrt(eye_radius_right**2*x_s**2 + eye_radius_right**2*y_s**2 + eye_radius_right**2*z_k**2 - 2 *
+                      eye_radius_right**2*z_k*z_s + eye_radius_right**2*z_s**2 - x_s**2*z_k**2 - y_s**2*z_k**2)
+        lamb = -(aux - z_k*z_s + z_k**2)/(x_s**2 + y_s**2 + z_k**2 - 2*z_k*z_s + z_s**2)
+
+        alpha = np.arccos((lamb * (z_k - z_s) + z_k) / np.sqrt((lamb * x_s)**2 + (lamb * y_s)**2 + (lamb * (z_k - z_s) + z_k)**2))
+        alpha_grad = alpha * 180.0 / np.pi
+        beta = np.arctan(np.sqrt(x_s**2 + y_s**2) / focal_length)
+        beta_grad = beta * 180.0 / np.pi
+        if ((z_k - eye_radius_right) * np.tan(beta)) != 0:      # avoid division by 0
+            radial_correction_factor = eye_radius_right * np.tan(alpha) / ((z_k - eye_radius_right) * np.tan(beta))
+            # radial_correction_factor = np.tan(alpha) / np.sin(alpha)
         else:
             radial_correction_factor = 1.0
 
@@ -204,28 +242,28 @@ def calibrate(img_resolution_factor):
     mean_error = np.sum(dist) / number_imgs
     print 'Calibration Mean Error Right:', mean_error, 'Max Error:', max_error
 
-
+    norm_factor_left = 1.0
+    norm_factor_right = 1.0
     # detect pupil center in left eye images for depth = 50 cm
     pupils_centered_50_left = detect_pupil_centers(imglist_50cm_left, img_resolution_factor)
     # correct left pupil coordinates
-    pupils_calibrated_50_left = correct_pupil_points(pupils_centered_50_left, norm_factor_left, Homography_left)
-
+    pupils_calibrated_50_left = correct_pupil_points(pupils_centered_50_left, Homography_left, eye_radius_left, pixelpitch_sensor, distance_eye_camera_left, focal_length)
     # detect pupil center in right eye images for depth = 50 cm
-    pupil_centered__50_right = detect_pupil_centers(imglist_50cm_right, img_resolution_factor)
+    pupil_centered_50_right = detect_pupil_centers(imglist_50cm_right, img_resolution_factor)
     # correct right pupil coordinates
-    pupils_calibrated_50_right = correct_pupil_points(pupil_centered__50_right, norm_factor_right, Homography_right)
+    pupils_calibrated_50_right = correct_pupil_points(pupil_centered_50_right, Homography_right, eye_radius_right, pixelpitch_sensor, distance_eye_camera_right, focal_length)
 
     # detect pupil center in left eye images for depth = 500 cm
     pupils_centered_500_left = detect_pupil_centers(imglist_500cm_left, img_resolution_factor)
     # correct left pupil coordinates
-    pupils_calibrated_500_left = correct_pupil_points(pupils_centered_500_left, norm_factor_left, Homography_left)
+    pupils_calibrated_500_left = correct_pupil_points(pupils_centered_500_left, Homography_left, eye_radius_left, pixelpitch_sensor, distance_eye_camera_left, focal_length)
 
     # detect pupil center in right eye images for depth = 500 cm
     pupil_centered_500_right = detect_pupil_centers(imglist_500cm_right, img_resolution_factor)
     # correct right pupil coordinates
-    pupils_calibrated_500_right = correct_pupil_points(pupil_centered_500_right, norm_factor_right, Homography_right)
+    pupils_calibrated_500_right = correct_pupil_points(pupil_centered_500_right, Homography_right, eye_radius_right, pixelpitch_sensor, distance_eye_camera_right, focal_length)
 
-    x0 = np.float32([[distance_eyes], [distance_eye_monitor], [pixelpitch_monitor],[monitor_res_x], [monitor_res_y]])
+    x0 = np.float32([[distance_eyes], [distance_eye_monitor]])
     optimized_args = fmin(optimize_3D, x0, xtol=1e-8, args=(pupils_calibrated_50_left, pupils_calibrated_50_right,
                                                             pupils_calibrated_200_left, pupils_calibrated_200_right,
                                                             pupils_calibrated_500_left, pupils_calibrated_500_right,
@@ -233,12 +271,13 @@ def calibrate(img_resolution_factor):
 
     distance_eyes = optimized_args[0]
     distance_eye_monitor = optimized_args[1]
-    pixelpitch_monitor = optimized_args[2]
-    monitor_res_x = optimized_args[3]
-    monitor_res_y = optimized_args[4]
+    # pixelpitch_monitor = optimized_args[2]
+    # monitor_res_x = optimized_args[3]
+    # monitor_res_y = optimized_args[4]
 
-    print distance_eyes, distance_eye_monitor, pixelpitch_monitor
-    return norm_factor_left, norm_factor_left, Homography_left, Homography_right, distance_eyes, distance_eye_monitor, pixelpitch_monitor, monitor_res_x, monitor_res_y
+
+    return Homography_left, Homography_right, distance_eyes, distance_eye_monitor, eye_radius_left, \
+           distance_eye_camera_left, eye_radius_right, distance_eye_camera_right
 
 
 # modelfunktion for 3D optimization
@@ -252,9 +291,9 @@ def optimize_3D(x, *args):
     x_3D_500_list = []
     y_3D_500_list = []
     z_3D_500_list = []
-    # monitor_res_x = 1920.0
-    # monitor_res_y = 1080.0
-    # pixelpitch_monitor = 0.058
+    monitor_res_x = 1920.0
+    monitor_res_y = 1080.0
+    pixelpitch_monitor = 0.058
 
 
     coords_50_left = args[0]
@@ -269,9 +308,8 @@ def optimize_3D(x, *args):
 
     distance_eyes = x[0]
     distance_eye_monitor = x[1]
-    pixelpitch_monitor = x[2]
-    monitor_res_x = x[3]
-    monitor_res_y = x[4]
+
+
     length = len(coords_200_left)
 
     #50
@@ -377,23 +415,38 @@ def optimize_3D(x, *args):
 
 # modelfunktion for radial error optimization
 def optimize_radialfactor(x, *args):
+
+    corrected_coords = []
+
     pupil_centered = args[0]
     calib_points_px = args[1]
-    norm_factor = x[0]
+    pixelpitch_sensor = args[2]
+    focal_length = args[3]
+
+    eye_radius = x[0]
+    distance_eye_camera = x[1]
 
     number_imgs = len(pupil_centered)
-    corrected_coords = []
+    z_s = distance_eye_camera + focal_length
+    z_k = distance_eye_camera
+
     for coord in pupil_centered:
 
-        alpha = np.arctan(np.sqrt(np.power(coord[0] * norm_factor, 2) + np.power(coord[1] * norm_factor, 2)))# / 1000.0)#(distance_eye_monitor / pixelpitch_monitor))
-        if alpha != 0:      # avoid division by 0
-            radial_correction_factor = np.tan(alpha) / np.sin(alpha)
+        x_s = coord[0] * pixelpitch_sensor
+        y_s = coord[1] * pixelpitch_sensor
+        aux = np.sqrt(eye_radius**2*x_s**2 + eye_radius**2*y_s**2 + eye_radius**2*z_k**2 - 2*eye_radius**2*z_k*z_s + eye_radius**2*z_s**2 - x_s**2*z_k**2 - y_s**2*z_k**2)
+        lamb = -(aux - z_k*z_s + z_k**2)/(x_s**2 + y_s**2 + z_k**2 - 2*z_k*z_s + z_s**2)
+
+        alpha = np.arccos((lamb * (z_k - z_s) + z_k) / np.sqrt((lamb * x_s)**2 + (lamb * y_s)**2 + (lamb * (z_k - z_s) + z_k)**2))
+        beta = np.arctan(np.sqrt(x_s**2 + y_s**2) / focal_length)
+        if ((z_k - eye_radius) * np.tan(beta)) != 0:      # avoid division by 0
+            radial_correction_factor = eye_radius * np.tan(alpha) / ((z_k - eye_radius) * np.tan(beta))
         else:
             radial_correction_factor = 1.0
-        corrected_coords.append(coord * radial_correction_factor) # 1.05124209
+
+        corrected_coords.append(coord * radial_correction_factor)
 
     pupils_rad_corrected = np.ravel(corrected_coords).reshape(number_imgs, 2)
-
 
     HomographyMat, mask = cv2.findHomography(np.float32(pupils_rad_corrected), calib_points_px)
 
@@ -457,16 +510,25 @@ def detect_pupil_centers(imglist, img_resolution_factor):
     return pupils_centered
 
 
-def correct_pupil_points(pupil_coords_original, norm_factor, Homography):
+def correct_pupil_points(pupil_coords_original, Homography, eye_radius, pixelpitch_sensor, distance_eye_camera, focal_length):
 
     length = len(pupil_coords_original)
     corrected_coords = []
 
     for coord in pupil_coords_original:
 
-        alpha = np.arctan(np.sqrt(np.square(coord[0] * norm_factor) + np.square(coord[1] * norm_factor)))
-        if alpha != 0:      # avoid division by 0
-            radial_correction_factor = np.tan(alpha) / np.sin(alpha)
+        x_s = coord[0] * pixelpitch_sensor
+        y_s = coord[1] * pixelpitch_sensor
+        z_s = distance_eye_camera + focal_length
+        z_k = distance_eye_camera
+        aux = np.sqrt(eye_radius**2*x_s**2 + eye_radius**2*y_s**2 + eye_radius**2*z_k**2 - 2*eye_radius**2*z_k*z_s + eye_radius**2*z_s**2 - x_s**2*z_k**2 - y_s**2*z_k**2)
+        lamb = -(aux - z_k*z_s + z_k**2)/(x_s**2 + y_s**2 + z_k**2 - 2*z_k*z_s + z_s**2)
+
+        alpha = np.arccos((lamb * (z_k - z_s) + z_k) / np.sqrt((lamb * x_s)**2 + (lamb * y_s)**2 + (lamb * (z_k - z_s) + z_k)**2))
+        beta = np.arctan(np.sqrt(x_s**2 + y_s**2) / focal_length)
+
+        if ((z_k - eye_radius) * np.tan(beta)) != 0:      # avoid division by 0
+            radial_correction_factor = eye_radius * np.tan(alpha) / ((z_k - eye_radius) * np.tan(beta))
         else:
             radial_correction_factor = 1.0
 
@@ -475,12 +537,33 @@ def correct_pupil_points(pupil_coords_original, norm_factor, Homography):
     pupils_radial_corrected = np.ravel(corrected_coords).reshape(length, 2)
     sensor_coords_H = np.ravel(np.float32(pupils_radial_corrected)).reshape(-1, length, 2)
 
+    # plot_x = np.ravel(pupils_radial_corrected[:, 0]).reshape(25, 1)
+    # plot_y = np.ravel(pupils_radial_corrected[:, 1]).reshape(25, 1)
+    #
+    # plt.figure(num=None, figsize=(16, 9), dpi=100, facecolor='w', edgecolor='k') #figsize=(7, 7),
+    # plt.grid(color='0.5')
+    # plt.axhline(0, color='k')
+    # plt.axvline(0, color='k')
+    #
+    # plt.plot(plot_x,plot_y, 'kx')
+    # # plt.plot(plot1_x,plot1_y, 'bx')
+    # # plt.plot(plot2_x,plot2_y, 'rx')
+    # # plt.axis([-0.4, 0.4, -0.4, 0.4])
+    # # plt.subplots_adjust(left=0.14, right=0.86)
+    # plt.xlabel('$\Delta \mathrm{x\ (Pixel)}$')
+    # plt.ylabel('$\Delta \mathrm{y\ (Pixel)}$')
+    #
+    # for i in range(1,26):
+    #     plt.annotate(i, xy=(plot_x[i - 1], plot_y[i - 1]), xytext = (-0.2, 0.2), textcoords = 'offset points', ha = 'right', va = 'bottom', color='0.4')
+    # # plt.savefig('foo.pdf', figsize=(7, 7), bbox_inches='tight')
+    # plt.show()
+
     if Homography is not None:
-        transformed_points_left = cv2.perspectiveTransform(sensor_coords_H, Homography)
+        transformed_points = cv2.perspectiveTransform(sensor_coords_H, Homography)
     else:
         print('No Homography Matrix!')
 
-    return transformed_points_left[0]
+    return transformed_points[0]
 
 
 # load images in a folder an store images into a list
